@@ -4,3 +4,4 @@ __pycache__/
 secrets
 .vscode/
 environment.yaml
+alembic.ini

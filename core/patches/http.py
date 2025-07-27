@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 from twitchio.http import TwitchHTTP
 from twitchio.errors import AuthenticationError
 
-from core.redis.auths import BotAuths
+from core.database.auths import BotAuths
 from core.utils.logger import get_log
 
 if TYPE_CHECKING:
@@ -35,7 +35,7 @@ class TwitchHTTPWrapper(TwitchHTTP):
 
     async def _generate_login(self):
         redirecter = await super()._generate_login()
-        self.auths.client_id     = self.client_id
+        # self.auths.client_id     = self.client_id # NOTE should never change
         self.auths.client_secret = self.client_secret
         self.auths.refresh_token = self._refresh_token
         self.auths.token         = self.token

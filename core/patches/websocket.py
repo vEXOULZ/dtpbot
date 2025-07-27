@@ -14,15 +14,19 @@ logging = get_log(__name__)
 
 class WSConnectionWrapper(WSConnection):
 
+    # FACADE: wrapper to properly parse PONG messages and not just ignore them
     async def _process_data(self, data: str):
         groups = data.split()
-        if groups[1] == 'PONG': # WHY: the FUCK does it not let me parse PONG messages ????
+        if groups[1] == 'PONG':
             parsed = {"action": "PONG", "message": groups[-1][1:]}
             partial_ = self._actions.get(parsed["action"])
             if partial_:
                 await partial_(parsed)
-        return await super()._process_data(data)
+        a = await super()._process_data(data)
+        return a
 
+    # FACADE: For my project I want to treat my bot's own messages the same way as others
+    # e.g. verifying if a pyramid break was successful
     async def _privmsg_echo(self, parsed):
         logging.debug(f'ACTION: PRIVMSG(ECHO):: {parsed["channel"]}')
 
@@ -39,8 +43,16 @@ class WSConnectionWrapper(WSConnection):
 
         self.dispatch("message", message)
 
+    # FACADE: Small pong dispatcher for pinging twitch puporses
+    async def _pong(self, parsed):
+        logging.debug(f'ACTION: PONG:: {parsed["message"]}')
+        
+        self.dispatch("pong", parsed)
+
+    # FACADE: add new actions
     def initialize(self):
         self._actions["PRIVMSG(ECHO)"] = self._privmsg_echo
+        self._actions["PONG"] = self._pong
 
 def apply_websocket_patch(bot: 'Bot'):
     bot._connection.__class__ = WSConnectionWrapper

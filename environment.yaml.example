@@ -1,2 +1,2 @@
-REDIS:
-  URL: 'redis://localhost:6379'
+SQLALCHEMY: ""
+CLIENT_ID: ""
