@@ -11,7 +11,7 @@ def build_appender(env) -> Callable:
             return f"🔧 {content}"
     else:
         def privmsg(content: str):
-            content
+            return content
     return privmsg
 
 beauty: Callable = build_appender(ENVIRONMENT)
