@@ -2,6 +2,7 @@ from typing import Iterable
 
 from sqlalchemy.orm import DeclarativeBase, Session
 from sqlalchemy import create_engine, update
+from sqlalchemy.dialects.postgresql import insert
 
 from core.config import SQLALCHEMY
 
@@ -26,9 +27,24 @@ class Base(DeclarativeBase):
             session.add(self)
             session.commit()
 
-    @classmethod
-    def bulk_save(cls, objs: 'Iterable[Base]'):
+    def create_or_update(self):
         with create_session() as session:
-            stmt = update(objs[0].__class__)
-            session.execute(stmt, [o.to_dict() for o in objs])
+            data = self.to_dict()
+            stmt = insert(self.__class__).values(data).on_conflict_do_update(constraint=self.__table__.primary_key, set_=data)
+            session.execute(stmt)
+            session.commit()
+
+    @classmethod
+    def bulk_update(cls, objs: 'Iterable[Base]'):
+        with create_session() as session:
+            stmt = update(objs[0].__class__).values([o.to_dict() for o in objs])
+            session.execute(stmt)
+            session.commit()
+
+    @classmethod
+    def bulk_create_or_update(cls, objs: 'Iterable[Base]'):
+        with create_session() as session:
+            data = [o.to_dict() for o in objs]
+            stmt = insert(objs[0].__class__).values(data).on_conflict_do_update(constraint=cls.__table__.primary_key, set_=data)
+            session.execute(stmt)
             session.commit()

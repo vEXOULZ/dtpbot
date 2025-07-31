@@ -7,6 +7,7 @@ import os
 import psutil
 from twitchio.ext import commands
 
+from core.utils.ws_send import beauty
 from core.acorn.base import Acorn
 from core.utils.timeit import TimeThis
 from core.utils.units import strfdelta, strfbytes
@@ -59,7 +60,7 @@ class MetaAcorn(Acorn):
         mem_usage = psutil.Process(pid).memory_info().rss # bytes
         mem_usage = strfbytes(mem_usage)
 
-        await ctx.send(f'latency: {time} | uptime: {uptime} | alloc: {mem_usage}')
+        await ctx.send(beauty(f'latency: {time} | uptime: {uptime} | alloc: {mem_usage}'))
 
     @CommandNut
     @cooldown(10, exception = PRIVILEDGE.NOBODY)
@@ -78,7 +79,7 @@ class MetaAcorn(Acorn):
     async def join(self, ctx: commands.Context, channel: str):
 
         if get_priviledge(ctx) >= PRIVILEDGE.GOD or ctx.author.name == channel.lower():
-            await ctx.send(f"joining channel #{channel.lower()}")
+            await ctx.send(beauty(f"joining channel #{channel.lower()}"))
             await ctx.bot.join_channels([channel.lower()])
 
     @CommandNut
@@ -96,5 +97,5 @@ class MetaAcorn(Acorn):
             # TODO throw error
             return
 
-        await ctx.send(f"parting channel #{channel.lower()}")
+        await ctx.send(beauty(f"parting channel #{channel.lower()}"))
         await ctx.bot.part_channels([channel.lower()])

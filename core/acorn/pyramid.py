@@ -1,11 +1,13 @@
 from random import random
 import math
+import datetime as dt
 
 from twitchio.ext import commands
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy import String, Column, select, update
+from sqlalchemy import String, Column, select, func
 
+from core.utils.ws_send import beauty
 from core.acorn.base import Acorn
 from core.nut.nut import Nut, CommandNut
 from core.nut.restrictions import restrict, PRIVILEDGE, fullname_only
@@ -90,18 +92,55 @@ class PyramidData(Base):
                 data = result.one_or_none()
                 if data is not None: data = data[0]
             return data
-        
+
         data = query()
         if data is None:
             cls.generate_default(user_name)
             data = query()
         return data
 
+class PyramidUserData(Base):
+    __tablename__ = "acorn_pyramid_user"
+
+    id_           : Mapped[int]         = mapped_column(primary_key=True, autoincrement=True)
+    channel_name  : Mapped[str]         = mapped_column(index=True)
+    user_name     : Mapped[str]         = mapped_column(index=True)
+    success       : Mapped[bool]
+    level         : Mapped[int]
+    pyramid       : Mapped[str]
+    destroyer_name: Mapped[str]         = mapped_column(index=True, nullable=True)
+    created_at    : Mapped[dt.datetime] = mapped_column(server_default=func.now())
+
+    @classmethod
+    def save_loss(cls, channel_name, user_name, level, pyramid, destroyer_name):
+        PyramidUserData(
+            channel_name = channel_name,
+            user_name = user_name,
+            success = False,
+            level = level,
+            pyramid = pyramid,
+            destroyer_name = destroyer_name,
+        ).create()
+
+    @classmethod
+    def save_win(cls, channel_name, user_name, level, pyramid):
+        PyramidUserData(
+            channel_name = channel_name,
+            user_name = user_name,
+            success = True,
+            level = level,
+            pyramid = pyramid,
+            destroyer_name = None,
+        ).create()
+
+    @classmethod
+    def get_user_stats(cls, channel_name, user_name):
+        pass
 
 class PyramidProfiles(Base):
     __tablename__ = "acorn_pyramid_profile"
 
-    profile_name : Mapped[str] = mapped_column(primary_key=True)
+    profile_name : Mapped[str]   = mapped_column(primary_key=True)
     up           : Mapped[float]
     upx          : Mapped[float]
     down         : Mapped[float]
@@ -126,9 +165,13 @@ class PyramidAcorn(Acorn):
     max_level = {}
     pyramid = {}
     configs: dict[str, PyramidData] = {}
-    profiles = PyramidProfiles.get_all()
+    profiles = None
     last_fact = {}
     req_level = 3
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.profiles = PyramidProfiles.get_all()
 
     def get_random_fact(self, ctx: commands.Context):
         rolled = self.last_fact.get(ctx.channel.name)
@@ -151,7 +194,8 @@ class PyramidAcorn(Acorn):
 
         # different chatter
         if user != self.last_user[channel]:
-            if self.level[channel] >= 2:
+            if self.max_level[channel] >= self.req_level:
+                PyramidUserData.save_loss(channel, self.last_user[channel], self.max_level[channel], self.pyramid[channel], user)
                 logging.info(f"#{channel} | {self.last_user[channel]}'s '{self.pyramid[channel]}' pyramid lvl {str(1)}/{str(1)} destroyed by '{user}: {self.last_message[channel]}'")
             return self.reset_pyramid(ctx, user, message)
 
@@ -203,11 +247,12 @@ class PyramidAcorn(Acorn):
         return roll > threshold
 
     async def facts_over_feelings(self, ctx: commands.Context, fact: str):
-        await ctx.send(f"/me ▲ FACT: {fact}")
+        await ctx.send(beauty(f"/me ▲ FACT: {fact}"))
 
     async def feelings_won_over(self, ctx: commands.Context, user: str, level: int, pyramid: str):
         logging.info(f"#{ctx.channel.name} | complete '{pyramid}' pyramid lvl {str(level)} by {user}")
-        await ctx.send(f"/me ▲ GRATS @{user}: {str(level)} high {pyramid} Clap")
+        await ctx.send(beauty(f"/me ▲ GRATS @{user}: {str(level)} high {pyramid} Clap"))
+        PyramidUserData.save_win(ctx.channel.name, user, level, pyramid)
 
     @Nut
     async def invoice(self, ctx: commands.Context):
@@ -234,7 +279,25 @@ class PyramidAcorn(Acorn):
         config.profile = profile
         config.save()
         logging.info(f"#{ctx.channel.name} | pyramid destroying profile changed to '{profile}' by @{ctx.author.name}")
-        await ctx.send(f"dooming profile changed to '{profile}'")
+        await ctx.send(beauty(f"Dooming profile changed to '{profile}'"))
+
+    @fullname_only
+    @CommandNut
+    @restrict(PRIVILEDGE.GOD)
+    async def createprofile(self, ctx: commands.Context, profile: str, up: float, upx: float, down: float, downx: float):
+
+        PyramidProfiles(
+            profile_name = profile,
+            up           = up,
+            upx          = upx,
+            down         = down,
+            downx        = downx,
+        ).create_or_update()
+
+        self.profiles = PyramidProfiles.get_all()
+
+        logging.info(f"#{ctx.channel.name} | pyramid destroying profile '{profile}' created by @{ctx.author.name}")
+        await ctx.send(beauty(f"Pyramid dooming profile '{profile}' created"))
 
     @fullname_only
     @CommandNut
@@ -248,7 +311,7 @@ class PyramidAcorn(Acorn):
         config.active = True
         config.save()
         logging.info(f"#{ctx.channel.name} | pyramid destroying enabled by @{ctx.author.name}")
-        await ctx.send(f"Pyramid watch enabled")
+        await ctx.send(beauty(f"Pyramid watch enabled"))
 
     @fullname_only
     @CommandNut
@@ -262,7 +325,7 @@ class PyramidAcorn(Acorn):
         config.active = False
         config.save()
         logging.info(f"#{ctx.channel.name} | pyramid destroying disabled by @{ctx.author.name}")
-        await ctx.send(f"No longer watching for pyramids")
+        await ctx.send(beauty(f"No longer watching for pyramids"))
 
     @fullname_only
     @CommandNut
@@ -270,6 +333,6 @@ class PyramidAcorn(Acorn):
     async def refreshprofiles(self, ctx: commands.Context):
         self.profiles = PyramidProfiles.get_all()
         logging.info(f"#{ctx.channel.name} | profile values refreshed by @{ctx.author.name}")
-        await ctx.send(f"Profiles refreshed; available: {list(self.profiles.keys())}")
+        await ctx.send(beauty(f"Profiles refreshed; available: {list(self.profiles.keys())}"))
 
 

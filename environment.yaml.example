@@ -1,2 +1,6 @@
 SQLALCHEMY: ""
 CLIENT_ID: ""
+GODS:
+  - vexoulz
+BOTNAME: ""
+ENVIRONMENT: prod

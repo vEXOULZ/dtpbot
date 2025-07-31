@@ -46,7 +46,6 @@ class WSConnectionWrapper(WSConnection):
     # FACADE: Small pong dispatcher for pinging twitch puporses
     async def _pong(self, parsed):
         logging.debug(f'ACTION: PONG:: {parsed["message"]}')
-        
         self.dispatch("pong", parsed)
 
     # FACADE: add new actions

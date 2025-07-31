@@ -55,8 +55,8 @@ class Nut():
 
 class CommandNut(Nut):
 
-    #                       quoted arg (\" quote esc) | named par | regular arg
-    _parsing_commands_regex = r"""((?<!\\)".*?(?<!\\)")|(-\S+.*?)|(\S+.*?)"""
+    #                       quoted arg (\" quote esc)  | named par       | regular arg
+    _parsing_commands_regex = r"""((?<!\\)".*?(?<!\\)")|(-[a-zA-z]\S*.*?)|(\S+.*?)"""
     _fullname_only = False
 
     _transforms = [
@@ -109,6 +109,21 @@ class CommandNut(Nut):
             kwargs |= nkwargs
 
         ctx, kwargs = self.admin_kwargs(ctx, **kwargs)
+
+        casting_at = 0
+        kwargs_list = list(kwargs.items())
+        new_args = []
+        # casting
+        for name, argument in inspect.signature(self._callback).parameters.items():
+            if name in ("self", "ctx"): continue
+            if len(args) < casting_at:
+                k, v = kwargs_list[casting_at - len(args)]
+                kwargs[k] = argument.annotation(v)
+            else:
+                new_args.append(argument.annotation(args[casting_at]))
+            casting_at += 1
+
+        args = tuple(new_args)
 
         return await super().__call__(ctx, *args, **kwargs)
 

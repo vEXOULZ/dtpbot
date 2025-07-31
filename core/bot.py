@@ -15,6 +15,8 @@ from core.database.auths import BotAuths
 from core.database.settings import Channels
 from core.utils.logger import get_log
 from core.nut.nut import Nut, CommandNut
+from core.config import ENVIRONMENT, GITHASH, GITSUMMARY , GITWHEN
+from core.utils.ws_send import beauty
 
 logging = get_log(__name__)
 
@@ -25,7 +27,8 @@ class Bot(Client):
     _acorns: dict[str, Acorn] = {}
     _command_nuts: dict[str, CommandNut] = {}
     _invoke_nuts: list[Nut] = []
-    _command_prefix = '\\+'
+    _command_prefix = "🏜️"
+    _dev_prefix = "_"
 
     def __init__(self, user_id: str):
         # Initialise our Bot with our access token, prefix and a list of channels to join on boot...
@@ -56,6 +59,9 @@ class Bot(Client):
         self.add_acorn(MetaAcorn(self))
         self.add_acorn(PyramidAcorn())
 
+        alive_notif = f"I am alive! build {GITHASH} as of {GITWHEN} \"{GITSUMMARY}\""
+        await self._connection.send(f"PRIVMSG #{self.nick} :{beauty(alive_notif)}\r\n")
+
     async def join_channels(self, channels: Union[List[str], Tuple[str]]):
         joined = []
         for channel in channels:
@@ -80,23 +86,24 @@ class Bot(Client):
     async def event_message(self, message: Message):
         # removes echo check
         ctx = Context(message, self)
-        await self.invoke(ctx)
-
-    @property
-    def command_regex(self):
-        return r"^" + self._command_prefix + r"([a-zA-Z0-9_.]+)"
-
-    async def invoke(self, ctx: Context):
-        # NOTE: command nut bypass
 
         nutting_list = []
 
-        if (command := re.search(self.command_regex, ctx.message.content)) is not None:
-            kword = command.groups()[0]
+        if ENVIRONMENT == 'dev': # dev only
+            if not ctx.message.content.startswith(self._dev_prefix) and ctx.author.name != self.nick:
+                return
+            ctx.message.content = ctx.message.content[len(self._dev_prefix):]
+        elif ctx.channel.name == self.nick and ctx.message.content.startswith(self._dev_prefix):
+            return # prod sybau if in bot channel and dev prefix is used
+
+        # command nuts
+        if ctx.message.content.startswith(self._command_prefix):
+            kword = ctx.message.content[len(self._command_prefix):].split(' ', 1)[0]
 
             if kword in self._command_nuts:
                 nutting_list.append(self._command_nuts[kword](ctx))
 
+        # invoke nuts
         for nut in self._invoke_nuts:
             nutting_list.append(nut(ctx))
 
