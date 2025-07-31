@@ -11,6 +11,8 @@ click==8.1.7
 colorama==0.4.6
 cryptography==43.0.1
 frozenlist==1.4.1
+gitdb==4.0.12
+GitPython==3.1.45
 greenlet==3.2.3
 hiredis==3.0.0
 idna==3.8
@@ -28,6 +30,7 @@ python-ulid==1.1.0
 PyYAML==6.0.2
 redis==5.0.8
 redis-om==0.3.2
+smmap==5.0.2
 SQLAlchemy==2.0.41
 twitchio==2.10.0
 types-cffi==1.16.0.20240331
