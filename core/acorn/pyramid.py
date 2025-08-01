@@ -335,4 +335,46 @@ class PyramidAcorn(Acorn):
         logging.info(f"#{ctx.channel.name} | profile values refreshed by @{ctx.author.name}")
         await ctx.send(beauty(f"Profiles refreshed; available: {list(self.profiles.keys())}"))
 
+    @fullname_only
+    @CommandNut
+    @restrict(PRIVILEDGE.MODERATOR)
+    async def resetfacts(self, ctx: commands.Context):
+        if ctx.channel.name not in self.configs:
+            self.reset_pyramid(ctx, '', '')
+            self.configs[ctx.channel.name] = PyramidData.get_data(ctx.channel.name)
+
+        config = self.configs[ctx.channel.name]
+        config.facts = default_facts
+        config.save()
+        logging.info(f"#{ctx.channel.name} | pyramid facts reset to default by @{ctx.author.name}")
+        await ctx.send(beauty(f"Pyramid facts reset to default"))
+
+    @fullname_only
+    @CommandNut
+    @restrict(PRIVILEDGE.MODERATOR)
+    async def addfacts(self, ctx: commands.Context, *args):
+        if ctx.channel.name not in self.configs:
+            self.reset_pyramid(ctx, '', '')
+            self.configs[ctx.channel.name] = PyramidData.get_data(ctx.channel.name)
+
+        config = self.configs[ctx.channel.name]
+        config.facts = list(config.facts) + [str(fact) for fact in args]
+        config.save()
+        logging.info(f"#{ctx.channel.name} | pyramid facts {str(args)} added successfully by @{ctx.author.name}")
+        await ctx.send(beauty(f"Pyramid facts added successfully"))
+
+    @fullname_only
+    @CommandNut
+    @restrict(PRIVILEDGE.MODERATOR)
+    async def clearallfacts(self, ctx: commands.Context):
+        if ctx.channel.name not in self.configs:
+            self.reset_pyramid(ctx, '', '')
+            self.configs[ctx.channel.name] = PyramidData.get_data(ctx.channel.name)
+
+        config = self.configs[ctx.channel.name]
+        config.facts = []
+        config.save()
+        logging.info(f"#{ctx.channel.name} | pyramid facts cleared by @{ctx.author.name}")
+        await ctx.send(beauty(f"Pyramid facts list emptied"))
+
 

@@ -92,13 +92,18 @@ class Bot(Client):
         if ENVIRONMENT == 'dev': # dev only
             if not ctx.message.content.startswith(self._dev_prefix) and ctx.author.name != self.nick:
                 return
-            ctx.message.content = ctx.message.content[len(self._dev_prefix):]
+            ctx.message.content = ctx.message.content[len(self._dev_prefix):].strip()
         elif ctx.channel.name == self.nick and ctx.message.content.startswith(self._dev_prefix):
             return # prod sybau if in bot channel and dev prefix is used
 
         # command nuts
         if ctx.message.content.startswith(self._command_prefix):
-            kword = ctx.message.content[len(self._command_prefix):].split(' ', 1)[0]
+            split = ctx.message.content[len(self._command_prefix):].strip().split(' ', 1)
+            kword = split[0]
+            content = ''
+            if len(split) == 2:
+                content = split[1]
+            ctx.message.content = content
 
             if kword in self._command_nuts:
                 nutting_list.append(self._command_nuts[kword](ctx))

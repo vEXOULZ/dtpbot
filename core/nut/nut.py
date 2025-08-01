@@ -102,8 +102,8 @@ class CommandNut(Nut):
 
     async def __call__(self, ctx: commands.Context, *args, **kwargs):
 
-        if len(arguments := ctx.message.content.split(' ', 1)) == 2:
-            matches = re.findall(self._parsing_commands_regex, arguments[1])
+        if ctx.message.content != '':
+            matches = re.findall(self._parsing_commands_regex, ctx.message.content)
             nargs, nkwargs = self._reorganize_findall(matches)
             args += tuple(nargs)
             kwargs |= nkwargs
@@ -116,11 +116,18 @@ class CommandNut(Nut):
         # casting
         for name, argument in inspect.signature(self._callback).parameters.items():
             if name in ("self", "ctx"): continue
+            if argument.kind == argument.VAR_POSITIONAL:
+                new_args += list(args[casting_at:])
+                casting_at = len(args)
+                continue
+            if argument.kind == argument.VAR_KEYWORD: break # all kwargs are already there
+            cast = (lambda x: x) if argument.annotation is inspect._empty else argument.annotation
+
             if len(args) < casting_at:
                 k, v = kwargs_list[casting_at - len(args)]
-                kwargs[k] = argument.annotation(v)
+                kwargs[k] = cast(v)
             else:
-                new_args.append(argument.annotation(args[casting_at]))
+                new_args.append(cast(args[casting_at]))
             casting_at += 1
 
         args = tuple(new_args)
