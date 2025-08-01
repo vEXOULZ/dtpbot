@@ -83,11 +83,8 @@ class CommandNut(Nut):
                     else:
                         args.append(r[1])
                 case 1: # named par
-                    if parameter is not None:
-                        # TODO throw error
-                        pass
-                    else:
-                        parameter = r[1]
+                    parameter = r[1]
+                    kwargs[parameter] = True # for bool args
 
         return args, kwargs
 
@@ -97,6 +94,12 @@ class CommandNut(Nut):
             new_channel = copy.copy(ctx.channel)
             new_channel._name = kwargs.pop('_ch')
             ctx.channel = new_channel
+
+        if '_sybau' in kwargs:
+            sybau = kwargs.pop('_sybau')
+            if sybau:
+                async def do_nothing(*a, **k): return
+                ctx.send = do_nothing
 
         return ctx, kwargs
 

@@ -9,6 +9,7 @@ from twitchio.ext import commands
 
 from core.utils.ws_send import beauty
 from core.acorn.base import Acorn
+from core.utils.logger import get_log
 from core.utils.timeit import TimeThis
 from core.utils.units import strfdelta, strfbytes
 from core.nut.nut import CommandNut
@@ -17,6 +18,8 @@ from core.config import BOTNAME
 
 if TYPE_CHECKING:
     from core.bot import Bot
+
+logging = get_log(__name__)
 
 class MetaAcorn(Acorn):
 
@@ -99,3 +102,9 @@ class MetaAcorn(Acorn):
 
         await ctx.send(beauty(f"parting channel #{channel.lower()}"))
         await ctx.bot.part_channels([channel.lower()])
+
+    @CommandNut
+    @restrict(PRIVILEDGE.GOD)
+    async def echo(self, ctx: commands.Context):
+        logging.info(f"#{ctx.channel.name} echoed @{ctx.author.name}'s '{ctx.message.content}'")
+        await ctx.send(beauty(ctx.message.content))
