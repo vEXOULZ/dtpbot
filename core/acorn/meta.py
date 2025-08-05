@@ -54,7 +54,7 @@ class MetaAcorn(Acorn):
                 self._tag_workers.pop(unique_tag, None)
                 return "error"
 
-        return strfdelta(t.time / 2)
+        return strfdelta(t.time)
 
     async def _ping(self, ctx: commands.Context):
         time   = await self._twitch_ping(ctx)
