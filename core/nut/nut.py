@@ -10,6 +10,7 @@ import aiocron
 from twitchio.ext import commands
 from twitchio.ext.commands import Context
 from twitchio.message import Message
+from twitchio.channel import Channel
 from twitchio.chatter import PartialChatter
 
 if TYPE_CHECKING:
@@ -196,7 +197,8 @@ class CronNut(Nut):
                     'id': f'cron::{self.name}::{dt.datetime.now().isoformat()}',
                     'tmi-sent-ts': None
                 },
-                author = PartialChatter(self.bot._connection, name=self.bot.nick)
+                author = PartialChatter(self.bot._connection, name=self.bot.nick),
+                channel = Channel(name=self.bot.nick, websocket=self.bot._connection)
             ), self.bot
         )
         return await super().actuate(ctx, *args, **kwargs)
