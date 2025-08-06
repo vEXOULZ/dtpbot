@@ -9,7 +9,7 @@ from sqlalchemy import String, Column, select, func
 
 from core.utils.ws_send import beauty
 from core.acorn.base import Acorn
-from core.nut.nut import Nut, CommandNut
+from core.nut.nut import InvokeNut, CommandNut, DEFAULT_ALIAS
 from core.nut.restrictions import restrict, PRIVILEDGE, fullname_only
 from core.utils.logger import get_log
 from core.database.sql import Base, create_session
@@ -254,7 +254,7 @@ class PyramidAcorn(Acorn):
         await ctx.send(beauty(f"/me ▲ GRATS @{user}: {str(level)} high {pyramid} Clap"))
         PyramidUserData.save_win(ctx.channel.name, user, level, pyramid)
 
-    @Nut
+    @InvokeNut()
     async def invoice(self, ctx: commands.Context):
         if ctx.channel.name not in self.configs:
             self.reset_pyramid(ctx, '', '')
@@ -263,8 +263,7 @@ class PyramidAcorn(Acorn):
         if self.configs[ctx.channel.name].active:
             await self.test_pyramid(ctx)
 
-    @fullname_only
-    @CommandNut
+    @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
     async def setprofile(self, ctx: commands.Context, profile: str):
         if profile not in self.profiles.keys():
@@ -281,8 +280,7 @@ class PyramidAcorn(Acorn):
         logging.info(f"#{ctx.channel.name} | pyramid destroying profile changed to '{profile}' by @{ctx.author.name}")
         await ctx.send(beauty(f"Dooming profile changed to '{profile}'"))
 
-    @fullname_only
-    @CommandNut
+    @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.GOD)
     async def createprofile(self, ctx: commands.Context, profile: str, up: float, upx: float, down: float, downx: float):
 
@@ -299,8 +297,7 @@ class PyramidAcorn(Acorn):
         logging.info(f"#{ctx.channel.name} | pyramid destroying profile '{profile}' created by @{ctx.author.name}")
         await ctx.send(beauty(f"Pyramid dooming profile '{profile}' created"))
 
-    @fullname_only
-    @CommandNut
+    @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
     async def enable(self, ctx: commands.Context):
         if ctx.channel.name not in self.configs:
@@ -313,8 +310,7 @@ class PyramidAcorn(Acorn):
         logging.info(f"#{ctx.channel.name} | pyramid destroying enabled by @{ctx.author.name}")
         await ctx.send(beauty(f"Pyramid watch enabled"))
 
-    @fullname_only
-    @CommandNut
+    @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
     async def disable(self, ctx: commands.Context):
         if ctx.channel.name not in self.configs:
@@ -327,16 +323,14 @@ class PyramidAcorn(Acorn):
         logging.info(f"#{ctx.channel.name} | pyramid destroying disabled by @{ctx.author.name}")
         await ctx.send(beauty(f"No longer watching for pyramids"))
 
-    @fullname_only
-    @CommandNut
+    @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.GOD)
     async def refreshprofiles(self, ctx: commands.Context):
         self.profiles = PyramidProfiles.get_all()
         logging.info(f"#{ctx.channel.name} | profile values refreshed by @{ctx.author.name}")
         await ctx.send(beauty(f"Profiles refreshed; available: {list(self.profiles.keys())}"))
 
-    @fullname_only
-    @CommandNut
+    @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
     async def resetfacts(self, ctx: commands.Context):
         if ctx.channel.name not in self.configs:
@@ -349,8 +343,7 @@ class PyramidAcorn(Acorn):
         logging.info(f"#{ctx.channel.name} | pyramid facts reset to default by @{ctx.author.name}")
         await ctx.send(beauty(f"Pyramid facts reset to default"))
 
-    @fullname_only
-    @CommandNut
+    @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
     async def addfacts(self, ctx: commands.Context, *args):
         if ctx.channel.name not in self.configs:
@@ -363,8 +356,7 @@ class PyramidAcorn(Acorn):
         logging.info(f"#{ctx.channel.name} | pyramid facts {str(args)} added successfully by @{ctx.author.name}")
         await ctx.send(beauty(f"Pyramid facts added successfully"))
 
-    @fullname_only
-    @CommandNut
+    @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
     async def clearallfacts(self, ctx: commands.Context):
         if ctx.channel.name not in self.configs:

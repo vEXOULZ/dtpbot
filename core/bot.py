@@ -14,7 +14,7 @@ from core.patches.websocket import apply_websocket_patch
 from core.database.auths import BotAuths
 from core.database.settings import Channels
 from core.utils.logger import get_log
-from core.nut.nut import Nut, CommandNut
+from core.nut.nut import Nut, CommandNut, InvokeNut
 from core.config import ENVIRONMENT, GITHASH, GITSUMMARY , GITWHEN
 from core.utils.ws_send import beauty
 
@@ -26,7 +26,7 @@ class Bot(Client):
     channels: list[str]
     _acorns: dict[str, Acorn] = {}
     _command_nuts: dict[str, CommandNut] = {}
-    _invoke_nuts: list[Nut] = []
+    _invoke_nuts: list[InvokeNut] = []
     _command_prefix = "🏜️"
     _dev_prefix = "_"
 
@@ -106,11 +106,11 @@ class Bot(Client):
             ctx.message.content = content
 
             if kword in self._command_nuts:
-                nutting_list.append(self._command_nuts[kword](ctx))
+                nutting_list.append(self._command_nuts[kword].actuate(ctx))
 
         # invoke nuts
         for nut in self._invoke_nuts:
-            nutting_list.append(nut(ctx))
+            nutting_list.append(nut.actuate(ctx))
 
         for nut in nutting_list:
             await nut
@@ -127,13 +127,13 @@ class Bot(Client):
             acorn.unload_nuts(self)
         logging.info('acorn <%s> unloaded', acorn_name)
 
-    def add_nut(self, nut: Nut):
+    def add_invoke_nut(self, nut: InvokeNut):
         self._invoke_nuts.append(nut)
 
-    def remove_nut(self, nut: Nut):
+    def remove_invoke_nut(self, nut: InvokeNut):
         self._invoke_nuts.pop(nut)
 
-    def add_command_nut(self, nut: CommandNut):
+    def add_command_nut(self, nut: CommandNut, aliases: list[str] = None):
         """Method which registers a command for use by the bot.
 
         Parameters
@@ -141,23 +141,25 @@ class Bot(Client):
         command: :class:`.Command`
             The command to register.
         """
-        if not isinstance(nut, Nut):
-            raise TypeError("Nuts must be a subclass of Nut.")
-        elif not nut._fullname_only and nut.name in self._command_nuts:
-            logging.warning(f"Nut <{nut.fullname}> overrode <{self._command_nuts[nut.name].fullname}>.")
-        self._command_nuts[nut.fullname] = nut
-        if not nut._fullname_only:
-            self._command_nuts[nut.name] = nut
 
-    def remove_command_nut(self, fullname: str | CommandNut):
-        if isinstance(fullname, CommandNut):
-            fullname = fullname.fullname
-        try:
-            if fullname in self._command_nuts:
-                nut = self._command_nuts[fullname]
-                if not nut._fullname_only and self._command_nuts[nut.name].fullname == fullname:
-                    del self._command_nuts[nut.name]
-                del self._command_nuts[fullname]
-        except KeyError as e:
-            raise KeyError(f"The nut '{fullname}' was not found") from e
+        assert(aliases is not None)
+
+        if not isinstance(nut, CommandNut):
+            raise TypeError("command nut must be a subclass of CommandNut.")
+
+        for alias in aliases:
+            if alias in self._command_nuts:
+                logging.warning(f"Nut <{nut.fullname}> overrode <{self._command_nuts[nut.name].fullname}> on alias <{alias}>.")
+            self._command_nuts[alias] = nut
+
+    def remove_command_nut(self, nut: CommandNut, aliases: list[str] = None):
+
+        assert(aliases is not None)
+
+        for alias in aliases:
+            if alias in self._command_nuts:
+                if self._command_nuts[alias].fullname is not nut.fullname:
+                    # TODO error
+                    continue
+                del self._command_nuts[alias]
 

@@ -2,40 +2,44 @@ from typing import Callable, TYPE_CHECKING
 import inspect
 import re
 import copy
+from enum import Enum, auto
+from abc import ABC
+import datetime as dt
 
+import aiocron
 from twitchio.ext import commands
+from twitchio.ext.commands import Context
+from twitchio.message import Message
+from twitchio.chatter import PartialChatter
 
 if TYPE_CHECKING:
     from core.acorn.base import Acorn
     from core.bot import Bot
 
-class Nut():
+class Nut(ABC):
 
     _callback: Callable = None
     _acorn: 'Acorn' = None
 
-    def __init__(self, fun: Callable, *args, name: str = None, **kwargs):
+    def __call__(self, fun: Callable = None, name: str = None, **kwargs):
+        self.initialize_function(fun, name, **kwargs)
+        return self
+
+    async def actuate(self, ctx: commands.Context, *args, **kwargs):
+        return await self._callback(self.acorn, ctx, *args, **kwargs)
+
+    def initialize_function(self, fun: Callable = None, name: str = None, **kwargs):
         if not inspect.iscoroutinefunction(fun):
             raise TypeError("Command callback must be a coroutine.")
         self._callback = fun
         self._name = name or fun.__name__
-
-    async def __call__(self, ctx: commands.Context, *args, **kwargs):
-        return await self._callback(self.acorn, ctx, *args, **kwargs)
+        return self
 
     @classmethod
     def apply(cls, fun: 'Nut | Callable', *args, **kwargs):
         if isinstance(fun, Nut):
             return fun
         return cls(fun, *args, **kwargs)
-
-    def register(self, acorn: 'Acorn', bot: 'Bot'):
-        self.acorn = acorn
-        bot.add_nut(self)
-
-    def unregister(self, acorn: 'Acorn', bot: 'Bot'):
-        self.acorn = acorn
-        bot.remove_nut(self)
 
     @property
     def name(self) -> str:
@@ -53,17 +57,41 @@ class Nut():
     def acorn(self, acc) -> None:
         self._acorn = acc
 
+    def register(self, acorn: 'Acorn', bot: 'Bot'): ...
+    def unregister(self, acorn: 'Acorn', bot: 'Bot'): ...
+
+class InvokeNut(Nut):
+
+    def register(self, acorn: 'Acorn', bot: 'Bot'):
+        self.acorn = acorn
+        bot.add_invoke_nut(self)
+
+    def unregister(self, acorn: 'Acorn', bot: 'Bot'):
+        self.acorn = acorn
+        bot.remove_invoke_nut(self)
+
+
+class DEFAULT_ALIAS(Enum):
+    BOTH_NAMES    = auto()
+    FULLNAME_ONLY = auto()
+    NAME_ONLY     = auto()
+
 class CommandNut(Nut):
 
     #                       quoted arg (\" quote esc)  | named par       | regular arg
     _parsing_commands_regex = r"""((?<!\\)".*?(?<!\\)")|(-[a-zA-z]\S*.*?)|(\S+.*?)"""
-    _fullname_only = False
+    _aliases: list[str] = None
+    _default_aliases: DEFAULT_ALIAS = DEFAULT_ALIAS.BOTH_NAMES
 
     _transforms = [
         lambda x: x[1:-1].replace(r'\"', '"'), # 0 - quoted arg
         lambda x: x[1:],                       # 1 - named par
         lambda x: x,                           # 2 - regular arg
     ]
+
+    def __init__(self, aliases: list[str] = None, default_aliases: DEFAULT_ALIAS = DEFAULT_ALIAS.BOTH_NAMES, **kwargs):
+        self._aliases = aliases
+        self._default_aliases = default_aliases
 
     def _reorganize_findall(self, arguments):
         res = []
@@ -103,7 +131,7 @@ class CommandNut(Nut):
 
         return ctx, kwargs
 
-    async def __call__(self, ctx: commands.Context, *args, **kwargs):
+    async def actuate(self, ctx: commands.Context, *args, **kwargs):
 
         if ctx.message.content != '':
             matches = re.findall(self._parsing_commands_regex, ctx.message.content)
@@ -135,12 +163,52 @@ class CommandNut(Nut):
 
         args = tuple(new_args)
 
-        return await super().__call__(ctx, *args, **kwargs)
+        return await super().actuate(ctx, *args, **kwargs)
 
     def register(self, acorn: 'Acorn', bot: 'Bot'):
         self.acorn = acorn
-        bot.add_command_nut(self)
+        if self._aliases is None:
+            match self._default_aliases:
+                case DEFAULT_ALIAS.BOTH_NAMES:
+                    self._aliases = [self.name, self.fullname]
+                case DEFAULT_ALIAS.FULLNAME_ONLY:
+                    self._aliases = [self.fullname]
+                case DEFAULT_ALIAS.NAME_ONLY:
+                    self._aliases = [self.name]
+        bot.add_command_nut(self, self._aliases)
 
     def unregister(self, acorn: 'Acorn', bot: 'Bot'):
         self.acorn = acorn
-        bot.remove_command_nut(self)
+        bot.remove_command_nut(self, self._aliases)
+
+
+class CronNut(Nut):
+
+    _cronstring = None
+
+    def __init__(self, cronstring: str, **kwargs):
+        self._cronstring = cronstring
+
+    async def actuate(self, *args, **kwargs):
+        ctx = Context(
+            Message(
+                tags = {
+                    'id': f'cron::{self.name}::{dt.datetime.now().isoformat()}',
+                    'tmi-sent-ts': None
+                },
+                author = PartialChatter(self.bot._connection, name=self.bot.nick)
+            ), self.bot
+        )
+        return await super().actuate(ctx, *args, **kwargs)
+
+    def register(self, acorn: 'Acorn', bot: 'Bot'):
+        self.acorn = acorn
+        self.bot = bot
+        cronfun = aiocron.crontab(self._cronstring, func=self.actuate, start=False)
+        self.cronfun = cronfun
+        self.cronfun.start()
+
+    def unregister(self, acorn: 'Acorn', bot: 'Bot'):
+        self.acorn = acorn
+        self.bot = bot
+        self.cronfun.stop()
