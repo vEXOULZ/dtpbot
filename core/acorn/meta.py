@@ -75,7 +75,7 @@ class MetaAcorn(Acorn):
     @CronNut('*/5 * * * *')
     async def ping_cron(self, ctx: commands.Context):
         new_channel = copy(ctx.channel)
-        new_channel.name = ctx.bot.nick
+        new_channel._name = ctx.bot.nick
         ctx.channel = new_channel
         await self._ping(ctx)
 
