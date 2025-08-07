@@ -3,7 +3,7 @@ import asyncio
 import datetime as dt
 from typing import TYPE_CHECKING
 import os
-from copy import copy
+from collections import deque
 
 import psutil
 from twitchio.ext import commands
@@ -12,6 +12,7 @@ from core.acorn.base import Acorn
 from core.utils.logger import get_log
 from core.utils.timeit import TimeThis
 from core.utils.units import strfdelta, strfbytes
+from core.utils.graph import generate_graph_string
 from core.nut.nut import CommandNut, DEFAULT_ALIAS, CronNut
 from core.nut.error import MissingDataException
 from core.nut.result import ECODE, Result
@@ -27,6 +28,12 @@ class MetaAcorn(Acorn):
 
     _name = 'meta'
     _tag_workers: dict[str, asyncio.Event] = {}
+
+    # 2h
+    latency_hist   = deque([dt.timedelta()] * 120, 120)
+    cpu_usage_hist = deque([0]              * 120, 120)
+    mem_usage_hist = deque([0]              * 120, 120)
+    beat           = False
 
     def __init__(self, bot: 'Bot'):
         super().__init__()
@@ -56,38 +63,61 @@ class MetaAcorn(Acorn):
                 self._tag_workers.pop(unique_tag, None)
                 return "error"
 
-        return strfdelta(t.time)
+        return t.time
 
     async def _ping(self, ctx: commands.Context):
         time   = await self._twitch_ping(ctx)
-        uptime = strfdelta(dt.datetime.now() - ctx.bot.start_time)
         pid = os.getpid()
         mem_usage = psutil.Process(pid).memory_info().rss # bytes
-        mem_usage = strfbytes(mem_usage)
+        cpu_perc = psutil.cpu_percent()
 
         return {
             'latency': time,
-            'uptime': uptime,
             'alloc': mem_usage,
+            'cpu': cpu_perc,
         }
 
     @cooldown(10)
     @CommandNut()
     async def ping(self, ctx: commands.Context):
         stats = await self._ping(ctx)
-        return Result(ECODE.OK, f"latency: {stats['latency']} ▲ uptime: {stats['uptime']} ▲ alloc: {stats['alloc']}")
 
-    @CronNut('*/15 * * * *')
-    async def ping_cron(self, ctx: commands.Context):
+        uptime  = strfdelta(dt.datetime.now() - ctx.bot.start_time)
+        latency = strfdelta(stats['latency'])
+        alloc   = strfbytes(stats['alloc'])
+        cpu     = str(stats['cpu'])
+
+        return Result(ECODE.OK, f"pong ▲ latency: {latency} ▲ uptime: {uptime} ▲ alloc: {alloc} ▲ cpu: {cpu}")
+
+    @CronNut('*/1 * * * *')
+    async def heartbeat(self, ctx: commands.Context):
         stats = await self._ping(ctx)
-        return Result(ECODE.OK, f"heartbeat ❤️ latency: {stats['latency']} ▲ uptime: {stats['uptime']} ▲ alloc: {stats['alloc']}")
+
+        self.latency_hist.append(stats['latency'])
+        self.mem_usage_hist.append(stats['alloc'])
+        self.cpu_usage_hist.append(stats['cpu'])
+
+        self.beat = True
+
+        return Result(ECODE.SILENT, None)
 
     @cooldown(10)
     @CommandNut(default_aliases=DEFAULT_ALIAS.FULLNAME_ONLY)
     async def fullping(self, ctx: commands.Context):
-        stats = await self._ping(ctx)
-        return Result(ECODE.OK, f"latency: {stats['latency']} ▲ uptime: {stats['uptime']} ▲ alloc: {stats['alloc']}")
-        # await self._redis(ctx)FTOD
+        if not self.beat:
+            await self.heartbeat.actuate()
+
+        uptime  = strfdelta(dt.datetime.now() - ctx.bot.start_time)
+        latency = strfdelta(self.latency_hist[-1])
+        alloc   = strfbytes(self.mem_usage_hist[-1])
+        cpu     = str(self.cpu_usage_hist[-1])
+
+        return Result(ECODE.OK, [
+            f"fullpong ▲ uptime: {uptime}",
+            f"fullpong ▲ latency ▲ 2h hist: {generate_graph_string([x.total_seconds() for x in self.latency_hist], cbfmt=strfdelta)} latest: {latency}",
+            f"fullpong ▲ alloc ▲ 2h hist: {generate_graph_string(self.mem_usage_hist, cbfmt=strfbytes)} latest: {alloc}",
+            f"fullpong ▲ cpu ▲ 2h hist: {generate_graph_string(self.cpu_usage_hist, cbfmt=str)} latest: {cpu}",
+        ])
 
     @channel([BOTNAME])
     @CommandNut()

@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.ext.mutable import MutableList
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy import String, Column, select
 
 from core.utils.logger import get_log
@@ -11,10 +11,16 @@ logging = get_log(__name__)
 class Channels(Base):
     __tablename__ = "joined_channels"
 
-    user_name: Mapped[str] = mapped_column(primary_key=True)
+    user_name  : Mapped[str]  = mapped_column(primary_key=True)
+    user_id    : Mapped[str]  = mapped_column(nullable=True)
+    active     : Mapped[bool] = mapped_column()
+    ambassators               = Column(ARRAY(String))
+    settings                  = Column(JSONB())
+
+    live: bool = False
 
     @classmethod
-    def add(cls, user_name) -> list[str]:
+    def add(cls, user_name) -> str:
 
         channel = Channels(
             user_name = user_name
@@ -23,7 +29,7 @@ class Channels(Base):
         return user_name
 
     @classmethod
-    def part(self, user_name) -> list[str]:
+    def part(self, user_name) -> str:
         # TODO add expiry time (2 weeks?) for all parted channel data
         Channels(
             user_name = user_name
@@ -32,7 +38,7 @@ class Channels(Base):
 
 
     @classmethod
-    def get_active_channels(cls) -> list[str]:
+    def get_active_channels(cls) -> str:
         with create_session() as session:
             stmt = select(Channels)
             result = session.execute(stmt)

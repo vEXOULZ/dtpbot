@@ -1,7 +1,6 @@
 import datetime as dt
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Collection
 from asyncio import as_completed
-import traceback
 
 from twitchio.ext.commands import Context
 from twitchio.message import Message
@@ -186,5 +185,9 @@ class Bot(Client):
         else:
             logging.error(f"#{ctx.channel.name} @{ctx.author.name}: {ctx.original_content} ▲ no Result object ▲ {result}")
 
-    async def sendprivmsg(self, ctx: Context, message: str):
-        await ctx.send(beauty(message))
+    async def sendprivmsg(self, ctx: Context, message: str | Collection[str]):
+        if isinstance(message, str):
+            await ctx.send(beauty(message))
+        else:
+            for msg in message:
+                await ctx.send(beauty(msg))
