@@ -18,7 +18,7 @@ def switch_channel(ctx: commands.Context, channel_name: str) -> commands.Context
 def new_context(bot: "Bot", channel_name: str = None) -> commands.Context:
     if channel_name is None:
         channel_name = bot.nick
-    return commands.Context(
+    ctx = commands.Context(
         Message(
             tags = {
                 'id': f'HELP',
@@ -28,3 +28,5 @@ def new_context(bot: "Bot", channel_name: str = None) -> commands.Context:
             channel = Channel(name=channel_name, websocket=bot._connection)
         ), bot
     )
+    ctx.original_content = ''
+    return ctx
