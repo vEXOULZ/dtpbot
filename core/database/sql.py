@@ -1,7 +1,7 @@
 from typing import Iterable
 
 from sqlalchemy.orm import DeclarativeBase, Session
-from sqlalchemy import create_engine, update
+from sqlalchemy import create_engine, update, delete, and_
 from sqlalchemy.dialects.postgresql import insert
 
 from core.config import SQLALCHEMY
@@ -31,6 +31,18 @@ class Base(DeclarativeBase):
         with create_session() as session:
             data = self.to_dict()
             stmt = insert(self.__class__).values(data).on_conflict_do_update(constraint=self.__table__.primary_key, set_=data)
+            session.execute(stmt)
+            session.commit()
+
+    def delete(self):
+        with create_session() as session:
+            data = self.to_dict()
+            stmt = delete(self.__class__)
+            all_keys = [x == data[x.key] for x in self.__table__.primary_key]
+            where_clause = all_keys[0]
+            for key, value in all_keys[1:]:
+                where_clause = and_(where_clause, key == value)
+            stmt = stmt.where(where_clause)
             session.execute(stmt)
             session.commit()
 

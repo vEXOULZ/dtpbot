@@ -23,17 +23,12 @@ class Channels(Base):
         return user_name
 
     @classmethod
-    def part(self, channels: list[str]) -> list[str]:
+    def part(self, user_name) -> list[str]:
         # TODO add expiry time (2 weeks?) for all parted channel data
-        parted = []
-        for channel in channels:
-            if channel in self.active_channels:
-                parted.append(channel)
-                self.active_channels.remove(channel)
-        if len(parted) > 0:
-            self.save()
-            logging.info("parted channels %s", str(parted))
-        return parted
+        Channels(
+            user_name = user_name
+        ).delete()
+        return user_name
 
 
     @classmethod

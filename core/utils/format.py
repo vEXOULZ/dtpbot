@@ -21,3 +21,25 @@ def one_line_exception(e: Exception) -> str:
     locale, reason = traceback.format_exception(e)[-2:]
     locale = locale.split("\n")[0] # location only
     return f"{locale.strip()} ▲ {reason.strip()}"
+
+
+def parse_escape_characters(string: str) -> str:
+
+    result = []
+    i = 0
+    while True:
+        idx = string.find('\\', i)
+
+        if idx == -1: # no more escapes; add remainder
+            result.append(string[i:])
+            break
+
+        result.append(string[i:idx]) # add everything up to next escape
+
+        if idx == len(string) - 1: # last character is an escape character; so end it (nothing to add)
+            break
+
+        result.append(string[idx+1]) # addnext character (e.g. 'b' in '\b')
+        i = idx+2 # skips 2 (the escape and escapee) (e.g '\b')
+
+    return ''.join(result)

@@ -13,6 +13,7 @@ from core.utils.logger import get_log
 from core.utils.timeit import TimeThis
 from core.utils.units import strfdelta, strfbytes
 from core.nut.nut import CommandNut, DEFAULT_ALIAS, CronNut
+from core.nut.error import MissingDataException
 from core.nut.result import ECODE, Result
 from core.nut.restrictions import cooldown, PRIVILEDGE, channel, restrict, get_priviledge
 from core.config import BOTNAME
@@ -70,8 +71,8 @@ class MetaAcorn(Acorn):
             'alloc': mem_usage,
         }
 
+    @cooldown(10)
     @CommandNut()
-    @cooldown(10, exception = PRIVILEDGE.NOBODY)
     async def ping(self, ctx: commands.Context):
         stats = await self._ping(ctx)
         return Result(ECODE.OK, f"latency: {stats['latency']} ▲ uptime: {stats['uptime']} ▲ alloc: {stats['alloc']}")
@@ -81,41 +82,41 @@ class MetaAcorn(Acorn):
         stats = await self._ping(ctx)
         return Result(ECODE.OK, f"heartbeat ❤️ latency: {stats['latency']} ▲ uptime: {stats['uptime']} ▲ alloc: {stats['alloc']}")
 
+    @cooldown(10)
     @CommandNut(default_aliases=DEFAULT_ALIAS.FULLNAME_ONLY)
-    @cooldown(10, exception = PRIVILEDGE.NOBODY)
     async def fullping(self, ctx: commands.Context):
         stats = await self._ping(ctx)
         return Result(ECODE.OK, f"latency: {stats['latency']} ▲ uptime: {stats['uptime']} ▲ alloc: {stats['alloc']}")
-        # await self._redis(ctx)
+        # await self._redis(ctx)FTOD
 
-    @CommandNut()
     @channel([BOTNAME])
+    @CommandNut()
     async def join(self, ctx: commands.Context, channel: str):
 
-        if get_priviledge(ctx) >= PRIVILEDGE.GOD or ctx.author.name == channel.lower():
+        if get_priviledge(ctx) >= PRIVILEDGE.ADMIN or ctx.author.name == channel.lower():
             await ctx.bot.join_channels([channel.lower()])
             return Result(ECODE.OK, f"joining channel #{channel.lower()}")
 
-    @CommandNut()
     @restrict(PRIVILEDGE.BROADCASTER)
+    @CommandNut()
     async def part(self, ctx: commands.Context, channel: str = None):
 
         if ctx.channel.name not in [ctx.author.name, BOTNAME]:
-            # TODO throw error
-            return
+            return Result(ECODE.SILENT, None)
 
         if channel is None:
             channel = ctx.author.name
 
+        channel = channel.lower()
+
         if channel == BOTNAME:
-            # TODO throw error
-            return
+            raise MissingDataException(f"Cannot part #{channel} due to: my channel")
 
-        await ctx.bot.part_channels([channel.lower()])
-        return Result(ECODE.OK, f"parting channel #{channel.lower()}")
+        await ctx.bot.part_channels([channel])
+        return Result(ECODE.OK, f"parting channel #{channel}")
 
+    @restrict(PRIVILEDGE.ADMIN)
     @CommandNut()
-    @restrict(PRIVILEDGE.GOD)
     async def echo(self, ctx: commands.Context):
         logging.info(f"#{ctx.channel.name} echoed @{ctx.author.name}'s '{ctx.message.content}'")
         return Result(ECODE.OK, ctx.message.content)

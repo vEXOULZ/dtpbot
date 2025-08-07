@@ -1,10 +1,11 @@
 from enum import IntEnum
 
 class ECODE(IntEnum):
-    UNCAUGHT = -2
-    ERROR    = -1
-    OK       = 0
-    SILENT   = 1
+    MALFORMED = -3
+    UNCAUGHT  = -2
+    ERROR     = -1
+    OK        = 0
+    SILENT    = 1
 
 
 class Result():

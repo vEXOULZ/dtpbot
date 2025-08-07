@@ -1,22 +1,23 @@
 from typing import Callable, TYPE_CHECKING
 import inspect
 import re
-import copy
 from enum import Enum, auto
 from abc import ABC
-import datetime as dt
+from functools import wraps
+from itertools import chain
 
 from zoneinfo import ZoneInfo
 import aiocron
 from twitchio.ext import commands
 from twitchio.ext.commands import Context
-from twitchio.message import Message
-from twitchio.channel import Channel
-from twitchio.chatter import PartialChatter
 
+from core.nut.error import ParameterParseException, DtpReturnableException
 from core.patches.context import switch_channel
+from core.utils.format import parse_escape_characters
 from core.utils.logger import get_log
 from core.nut.result import Result, ECODE
+from core.patches.context import new_context
+from core.nut.restrictions import get_priviledge, PRIVILEDGE
 
 logging = get_log(__name__)
 
@@ -35,12 +36,17 @@ class Nut(ABC):
 
     async def actuate(self, ctx: commands.Context, *args, **kwargs):
         try:
-            result = await self._callback(self.acorn, ctx, *args, **kwargs)
+            result = await self.trigger(self.acorn, ctx, *args, **kwargs)
             if isinstance(result, Result):
                 return result
-            return Result(ECODE.UNCAUGHT, result)
+            return Result(ECODE.MALFORMED, result)
+        except DtpReturnableException as e:
+            return Result(ECODE.ERROR, e)
         except Exception as e:
             return Result(ECODE.UNCAUGHT, e)
+
+    async def trigger(self, acorn, ctx, *args, **kwargs):
+        return await self._callback(acorn, ctx, *args, **kwargs)
 
     def initialize_function(self, fun: Callable = None, name: str = None, **kwargs):
         if not inspect.iscoroutinefunction(fun):
@@ -74,16 +80,30 @@ class Nut(ABC):
     def register(self, acorn: 'Acorn', bot: 'Bot'): ...
     def unregister(self, acorn: 'Acorn', bot: 'Bot'): ...
 
-class InvokeNut(Nut):
+class RegexNut(Nut):
+    _regex: str = None
+
+    def __init__(self, regex: str = r"""(?s).*""", **kwargs):
+        self._regex = regex
+
+        def wrapper(fun):
+            @wraps(fun)
+            async def run(acorn, ctx: Context, *args, **kwargs):
+                if (match:=re.search(self._regex, ctx.message.content)) is not None:
+                    return await fun(acorn, ctx, *args, match=match, **kwargs)
+
+            return run
+
+        self.trigger = wrapper(self.trigger)
 
     def register(self, acorn: 'Acorn', bot: 'Bot'):
         self.acorn = acorn
-        bot.add_invoke_nut(self)
+        bot.add_regex_nut(self)
         return ""
 
     def unregister(self, acorn: 'Acorn', bot: 'Bot'):
         self.acorn = acorn
-        bot.remove_invoke_nut(self)
+        bot.remove_regex_nut(self)
 
 
 class DEFAULT_ALIAS(Enum):
@@ -93,90 +113,117 @@ class DEFAULT_ALIAS(Enum):
 
 class CommandNut(Nut):
 
-    #                       quoted arg (\" quote esc)  | named par       | regular arg
-    _parsing_commands_regex = r"""((?<!\\)".*?(?<!\\)")|(-[a-zA-z]\S*.*?)|(\S+.*?)"""
+    #                            quoted arg (\ esc chr)   | named par       | regular arg
+    _parsing_commands_regex = r"""(".*?[^\\](?:\\\\)*(?=")")|(-[a-zA-z]\S*.*?)|(\S+.*?)"""
     _aliases: list[str] = None
     _default_aliases: DEFAULT_ALIAS = DEFAULT_ALIAS.BOTH_NAMES
-
-    _transforms = [
-        lambda x: x[1:-1].replace(r'\"', '"'), # 0 - quoted arg
-        lambda x: x[1:],                       # 1 - named par
-        lambda x: x,                           # 2 - regular arg
-    ]
 
     def __init__(self, aliases: list[str] = None, default_aliases: DEFAULT_ALIAS = DEFAULT_ALIAS.BOTH_NAMES, **kwargs):
         self._aliases = aliases
         self._default_aliases = default_aliases
 
+        def wrapper(fun):
+            @wraps(fun)
+            async def run(acorn, ctx: Context, *args, **kwargs):
+                matches = re.findall(self._parsing_commands_regex, ctx.message.content)
+                args, kwargs, awargs = self._reorganize_findall(matches)
+
+                ctx = self.admin_kwargs(ctx, **awargs)
+
+                iterargs = iter(args)
+                new_args = []
+
+                all_missing = []
+
+                subject = next(iterargs, None)
+                for name, argument in inspect.signature(self._callback).parameters.items():
+                    if name in ("self", "ctx"): continue
+                    cast = (lambda x: x) if argument.annotation is inspect._empty else argument.annotation
+                    match argument.kind:
+                        case argument.POSITIONAL_ONLY:
+                            if subject is None:
+                                all_missing.append(name)
+                            else:
+                                new_args.append(subject)
+                                subject = next(iterargs, None)
+                        case argument.VAR_POSITIONAL: # TODO maybe cast this somehow?
+                            while subject is not None and not isinstance(subject, tuple):
+                                new_args.append(cast(subject))
+                                subject = next(iterargs, None)
+                            continue
+                        case argument.POSITIONAL_OR_KEYWORD:
+                            if subject is not None:
+                                new_args.append(cast(subject))
+                                subject = next(iterargs, None)
+                            elif name in kwargs.keys():
+                                kwargs[name] = cast(kwargs[name])
+                            elif argument.default is inspect._empty:
+                                all_missing.append(name)
+                        case argument.KEYWORD_ONLY:
+                            if name in kwargs.keys():
+                                kwargs[name] = cast(kwargs[name])
+                        case argument.VAR_KEYWORD: # TODO cast this somehow?
+                            pass # they are already there, no action is needed
+
+                if len(all_missing) > 0:
+                    raise ParameterParseException(f"'{self.fullname}' missing required positional parameter(s) {str(all_missing)}")
+
+                args = tuple(new_args)
+                return await fun(acorn, ctx, *args, **kwargs)
+
+            return run
+
+        self.trigger = wrapper(self.trigger)
+
     def _reorganize_findall(self, arguments):
         res = []
         for arg in arguments:
-            res.append(next((x, self._transforms[x](y)) for x, y in enumerate(arg) if y != ''))
+            res.append(next((x, parse_escape_characters(y)) for x, y in enumerate(arg) if y != ''))
 
         args = []
         kwargs = {}
 
         parameter = None
-        for r in res:
-            match r[0]:
+        had_parameter = False
+        for argtype, argvalue in res:
+            match argtype:
                 case 0 | 2: # quoted arg | regular arg
+                    value = argvalue
+                    if argtype == 0: # quoted arg
+                        value = value[1:-1] # remove quotes
                     if parameter is not None:
-                        kwargs[parameter] = r[1]
+                        kwargs[parameter] = value
                         parameter = None
+                    elif had_parameter:
+                        raise ParameterParseException()
                     else:
-                        args.append(r[1])
+                        args.append(value)
                 case 1: # named par
-                    parameter = r[1]
+                    value = argvalue[1:] # remove dash
+                    parameter = value
                     kwargs[parameter] = True # for bool args
+                    had_parameter = True
 
-        return args, kwargs
+        awargs = {x: kwargs.pop(x) for x in list(kwargs.keys()) if x.startswith("_")} # admin args
 
-    def admin_kwargs(self, ctx: commands.Context, **kwargs):
+        return args, kwargs, awargs
 
-        if '_ch' in kwargs:
-            ctx = switch_channel(ctx, kwargs.pop('_ch'))
+    def admin_kwargs(self, ctx: commands.Context, **awargs):
+        if get_priviledge(ctx) < PRIVILEDGE.ADMIN:
+            return ctx
 
-        if '_sybau' in kwargs:
-            sybau = kwargs.pop('_sybau')
+        # TODO recreate context with no awargs
+
+        if '_ch' in awargs:
+            ctx = switch_channel(ctx, awargs.pop('_ch'))
+
+        if '_sybau' in awargs:
+            sybau = awargs.pop('_sybau')
             if sybau:
                 async def do_nothing(*a, **k): return
                 ctx.send = do_nothing
 
-        return ctx, kwargs
-
-    async def actuate(self, ctx: commands.Context, *args, **kwargs):
-
-        if ctx.message.content != '':
-            matches = re.findall(self._parsing_commands_regex, ctx.message.content)
-            nargs, nkwargs = self._reorganize_findall(matches)
-            args += tuple(nargs)
-            kwargs |= nkwargs
-
-        ctx, kwargs = self.admin_kwargs(ctx, **kwargs)
-
-        casting_at = 0
-        kwargs_list = list(kwargs.items())
-        new_args = []
-        # casting
-        for name, argument in inspect.signature(self._callback).parameters.items():
-            if name in ("self", "ctx"): continue
-            if argument.kind == argument.VAR_POSITIONAL:
-                new_args += list(args[casting_at:])
-                casting_at = len(args)
-                continue
-            if argument.kind == argument.VAR_KEYWORD: break # all kwargs are already there
-            cast = (lambda x: x) if argument.annotation is inspect._empty else argument.annotation
-
-            if len(args) < casting_at:
-                k, v = kwargs_list[casting_at - len(args)]
-                kwargs[k] = cast(v)
-            else:
-                new_args.append(cast(args[casting_at]))
-            casting_at += 1
-
-        args = tuple(new_args)
-
-        return await super().actuate(ctx, *args, **kwargs)
+        return ctx
 
     def register(self, acorn: 'Acorn', bot: 'Bot'):
         self.acorn = acorn
@@ -206,16 +253,7 @@ class CronNut(Nut):
         self._timezone = timezone
 
     async def actuate(self, *args, **kwargs):
-        ctx = Context(
-            Message(
-                tags = {
-                    'id': f'cron::{self.name}::{dt.datetime.now().isoformat()}',
-                    'tmi-sent-ts': None
-                },
-                author = PartialChatter(self.bot._connection, name=self.bot.nick),
-                channel = Channel(name=self.bot.nick, websocket=self.bot._connection)
-            ), self.bot
-        )
+        ctx = new_context(self.bot)
         result = await super().actuate(ctx, *args, **kwargs)
         await self.bot.treat_result(ctx, result)
         return result

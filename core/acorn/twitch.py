@@ -9,6 +9,7 @@ from core.utils.logger import get_log
 from core.utils.units import strfdelta
 from core.nut.nut import CommandNut
 from core.nut.result import Result, ECODE
+from core.nut.restrictions import cooldown, PRIVILEDGE
 
 logging = get_log(__name__)
 
@@ -16,6 +17,7 @@ class TwitchAcorn(Acorn):
 
     _name = 'twitch'
 
+    @cooldown(15)
     @CommandNut()
     async def streaminfo(self, ctx: commands.Context, channel: str = None):
         if channel == None:
@@ -26,6 +28,7 @@ class TwitchAcorn(Acorn):
         return Result(ECODE.OK, f"#{channel} is live ▲ '{result[0].game_name}' ▲ {strfdelta(dt.datetime.now(tz=dt.timezone.utc) - result[0].started_at)} ▲ {str(result[0].viewer_count)} viewers ▲ title: {result[0].title}")
 
 
+    @cooldown(15)
     @CommandNut()
     async def schedule(self, ctx: commands.Context, channel: str = None):
         if channel == None:

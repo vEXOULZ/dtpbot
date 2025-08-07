@@ -4,8 +4,8 @@ import datetime as dt
 
 from twitchio.ext import commands
 
-from core.nut.nut import CommandNut
 from core.utils.logger import get_log
+from core.nut.result import Result, ECODE
 
 logging = get_log(__name__)
 
@@ -17,7 +17,7 @@ class PRIVILEDGE(IntEnum):
     MODERATOR = 3
     AMBASSADOR = 4
     BROADCASTER = 5
-    GOD = 6
+    ADMIN = 6
     NOBODY = 7
 
 class SCOPE(IntEnum):
@@ -26,8 +26,8 @@ class SCOPE(IntEnum):
     GLOBAL = 2
 
 def get_priviledge(ctx: commands.Context):
-    if ctx.author.name == 'vexoulz':
-        return PRIVILEDGE.GOD
+    if ctx.author.name == 'vexoulz': # TODO add this to db
+        return PRIVILEDGE.ADMIN
     if ctx.author.is_broadcaster:
         return PRIVILEDGE.BROADCASTER
     if ctx.author.is_mod:
@@ -40,18 +40,31 @@ def get_priviledge(ctx: commands.Context):
 
 
 def restrict(level: PRIVILEDGE):
-    def deco(fun):
+    def deco(nut):
+        from core.nut.nut import Nut
+        if not isinstance(nut, Nut):
+            raise TypeError("decorated object has to be nutty")
+
+        fun = nut.trigger
         @wraps(fun)
         async def wrapper(self, ctx: commands.Context, *args, **kwargs):
             if get_priviledge(ctx) >= level:
                 return await fun(self, ctx, *args, **kwargs)
-        return wrapper
+            return Result(ECODE.SILENT, None)
+
+        nut.trigger = wrapper
+        return nut
 
     return deco
 
 
 def cooldown(cooldown: int, exception: PRIVILEDGE = PRIVILEDGE.MODERATOR, scope: SCOPE = SCOPE.CHANNEL):
-    def deco(fun):
+    def deco(nut):
+        from core.nut.nut import Nut
+        if not isinstance(nut, Nut):
+            raise TypeError("decorated object has to be nutty")
+
+        fun = nut.trigger
         @wraps(fun)
         async def wrapper(self, ctx: commands.Context, *args, **kwargs):
             match scope:
@@ -62,23 +75,34 @@ def cooldown(cooldown: int, exception: PRIVILEDGE = PRIVILEDGE.MODERATOR, scope:
                 case SCOPE.GLOBAL:
                     varname = f"lastcall"
 
-            if varname not in fun.__dict__.keys():
-                fun.__dict__[varname] = dt.datetime.min
+            if varname not in nut.__dict__.keys():
+                nut.__dict__[varname] = dt.datetime.min
 
             now = dt.datetime.now()
-            if get_priviledge(ctx) >= exception or (now - fun.__dict__[varname]).total_seconds() > cooldown:
-                fun.__dict__[varname] = now
+            if get_priviledge(ctx) >= exception or (now - nut.__dict__[varname]).total_seconds() > cooldown:
+                nut.__dict__[varname] = now
                 return await fun(self, ctx, *args, **kwargs)
-        return wrapper
+            return Result(ECODE.SILENT, None)
+
+        nut.trigger = wrapper
+        return nut
 
     return deco
 
 def channel(channels: list[str]):
-    def deco(fun):
+    def deco(nut):
+        from core.nut.nut import Nut
+        if not isinstance(nut, Nut):
+            raise TypeError("decorated object has to be nutty")
+
+        fun = nut.trigger
         @wraps(fun)
         async def wrapper(self, ctx: commands.Context, *args, **kwargs):
             if ctx.channel.name in channels:
                 return await fun(self, ctx, *args, **kwargs)
-        return wrapper
+            return Result(ECODE.SILENT, None)
+
+        nut.trigger = wrapper
+        return nut
 
     return deco

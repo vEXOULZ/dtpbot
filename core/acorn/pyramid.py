@@ -9,8 +9,9 @@ from sqlalchemy import String, Column, select, func
 
 from core.nut.result import Result, ECODE
 from core.acorn.base import Acorn
-from core.nut.nut import InvokeNut, CommandNut, DEFAULT_ALIAS
+from core.nut.nut import RegexNut, CommandNut, DEFAULT_ALIAS
 from core.nut.restrictions import restrict, PRIVILEDGE
+from core.nut.error import MissingDataException
 from core.utils.logger import get_log
 from core.database.sql import Base, create_session
 
@@ -256,8 +257,8 @@ class PyramidAcorn(Acorn):
         await ctx.bot.treat_result(ctx, result)
         PyramidUserData.save_win(ctx.channel.name, user, level, pyramid)
 
-    @InvokeNut()
-    async def invoice(self, ctx: commands.Context):
+    @RegexNut()
+    async def invoice(self, ctx: commands.Context, match: str = None):
         if ctx.channel.name not in self.configs:
             self.reset_pyramid(ctx, '', '')
             self.configs[ctx.channel.name] = PyramidData.get_data(ctx.channel.name)
@@ -267,12 +268,11 @@ class PyramidAcorn(Acorn):
 
         return Result(ECODE.SILENT, None)
 
-    @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
+    @CommandNut(default_aliases=DEFAULT_ALIAS.FULLNAME_ONLY)
     async def setprofile(self, ctx: commands.Context, profile: str):
         if profile not in self.profiles.keys():
-            # TODO throw error
-            return
+            raise MissingDataException(f"profile '{profile}' does not exist")
 
         if ctx.channel.name not in self.configs:
             self.reset_pyramid(ctx, '', '')
@@ -284,12 +284,12 @@ class PyramidAcorn(Acorn):
         logging.info(f"#{ctx.channel.name} | pyramid destroying profile changed to '{profile}' by @{ctx.author.name}")
         return Result(ECODE.OK, f"Dooming profile changed to '{profile}'")
 
-    @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
-    @restrict(PRIVILEDGE.GOD)
-    async def createprofile(self, ctx: commands.Context, profile: str, up: float, upx: float, down: float, downx: float):
+    @restrict(PRIVILEDGE.ADMIN)
+    @CommandNut(default_aliases=DEFAULT_ALIAS.FULLNAME_ONLY)
+    async def createprofile(self, ctx: commands.Context, name: str, up: float, upx: float, down: float, downx: float):
 
         PyramidProfiles(
-            profile_name = profile,
+            profile_name = name,
             up           = up,
             upx          = upx,
             down         = down,
@@ -298,11 +298,11 @@ class PyramidAcorn(Acorn):
 
         self.profiles = PyramidProfiles.get_all()
 
-        logging.info(f"#{ctx.channel.name} | pyramid destroying profile '{profile}' created by @{ctx.author.name}")
-        return Result(ECODE.OK, f"Pyramid dooming profile '{profile}' created")
+        logging.info(f"#{ctx.channel.name} | pyramid destroying profile '{name}' created by @{ctx.author.name}")
+        return Result(ECODE.OK, f"Pyramid dooming profile '{name}' created")
 
-    @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
+    @CommandNut(default_aliases=DEFAULT_ALIAS.FULLNAME_ONLY)
     async def enable(self, ctx: commands.Context):
         if ctx.channel.name not in self.configs:
             self.reset_pyramid(ctx, '', '')
@@ -314,8 +314,8 @@ class PyramidAcorn(Acorn):
         logging.info(f"#{ctx.channel.name} | pyramid destroying enabled by @{ctx.author.name}")
         return Result(ECODE.OK, f"Pyramid watch enabled")
 
-    @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
+    @CommandNut(default_aliases=DEFAULT_ALIAS.FULLNAME_ONLY)
     async def disable(self, ctx: commands.Context):
         if ctx.channel.name not in self.configs:
             self.reset_pyramid(ctx, '', '')
@@ -327,15 +327,15 @@ class PyramidAcorn(Acorn):
         logging.info(f"#{ctx.channel.name} | pyramid destroying disabled by @{ctx.author.name}")
         return Result(ECODE.OK, f"No longer watching for pyramids")
 
-    @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
-    @restrict(PRIVILEDGE.GOD)
+    @restrict(PRIVILEDGE.ADMIN)
+    @CommandNut(default_aliases=DEFAULT_ALIAS.FULLNAME_ONLY)
     async def refreshprofiles(self, ctx: commands.Context):
         self.profiles = PyramidProfiles.get_all()
         logging.info(f"#{ctx.channel.name} | profile values refreshed by @{ctx.author.name}")
         return Result(ECODE.OK, f"Profiles refreshed; available: {list(self.profiles.keys())}")
 
-    @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
+    @CommandNut(default_aliases=DEFAULT_ALIAS.FULLNAME_ONLY)
     async def resetfacts(self, ctx: commands.Context):
         if ctx.channel.name not in self.configs:
             self.reset_pyramid(ctx, '', '')
@@ -347,8 +347,8 @@ class PyramidAcorn(Acorn):
         logging.info(f"#{ctx.channel.name} | pyramid facts reset to default by @{ctx.author.name}")
         return Result(ECODE.OK, f"Pyramid facts reset to default")
 
-    @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
+    @CommandNut(default_aliases=DEFAULT_ALIAS.FULLNAME_ONLY)
     async def addfacts(self, ctx: commands.Context, *args):
         if ctx.channel.name not in self.configs:
             self.reset_pyramid(ctx, '', '')
@@ -360,8 +360,8 @@ class PyramidAcorn(Acorn):
         logging.info(f"#{ctx.channel.name} | pyramid facts {str(args)} added successfully by @{ctx.author.name}")
         return Result(ECODE.OK, f"Pyramid facts added successfully")
 
-    @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
+    @CommandNut(default_aliases=DEFAULT_ALIAS.FULLNAME_ONLY)
     async def clearallfacts(self, ctx: commands.Context):
         if ctx.channel.name not in self.configs:
             self.reset_pyramid(ctx, '', '')

@@ -17,7 +17,7 @@ from core.patches.context import new_context
 from core.database.auths import BotAuths
 from core.database.settings import Channels
 from core.utils.logger import get_log
-from core.nut.nut import CommandNut, InvokeNut
+from core.nut.nut import CommandNut, RegexNut
 from core.nut.result import Result, ECODE
 from core.config import ENVIRONMENT, GITHASH, GITSUMMARY , GITWHEN
 from core.utils.format import beauty, one_line_exception
@@ -30,7 +30,7 @@ class Bot(Client):
     channels: list[str]
     _acorns: dict[str, Acorn] = {}
     _command_nuts: dict[str, CommandNut] = {}
-    _invoke_nuts: list[InvokeNut] = []
+    _regex_nuts: list[RegexNut] = []
     _command_prefix = "🏜️"
     _dev_prefix = "_"
 
@@ -83,7 +83,7 @@ class Bot(Client):
         for channel in channels:
             if channel in self.channels:
                 Channels.part(channel)
-                parted.pop(channel)
+                parted.append(channel)
         if len(parted) > 0:
             logging.info("parting channels: %s", str(parted))
             await super().part_channels(channels)
@@ -115,8 +115,8 @@ class Bot(Client):
             if kword in self._command_nuts:
                 nutting_list.append(self._command_nuts[kword].actuate(ctx))
 
-        # invoke nuts
-        for nut in self._invoke_nuts:
+        # regex nuts
+        for nut in self._regex_nuts:
             nutting_list.append(nut.actuate(ctx))
 
         for nut in as_completed(nutting_list):
@@ -135,11 +135,11 @@ class Bot(Client):
             acorn.unload_nuts(self)
         logging.info('acorn <%s> unloaded', acorn_name)
 
-    def add_invoke_nut(self, nut: InvokeNut):
-        self._invoke_nuts.append(nut)
+    def add_regex_nut(self, nut: RegexNut):
+        self._regex_nuts.append(nut)
 
-    def remove_invoke_nut(self, nut: InvokeNut):
-        self._invoke_nuts.pop(nut)
+    def remove_regex_nut(self, nut: RegexNut):
+        self._regex_nuts.pop(nut)
 
     def add_command_nut(self, nut: CommandNut, aliases: list[str] = None):
         """Method which registers a command for use by the bot.
@@ -178,10 +178,13 @@ class Bot(Client):
                     await self.sendprivmsg(ctx, result.result)
                 case ECODE.SILENT:
                     pass
+                case ECODE.ERROR:
+                    logging.warning(f"#{ctx.channel.name} @{ctx.author.name}: {ctx.original_content} ▲ {result.code} {result.code.name} ▲ {one_line_exception(result.result)}")
+                    await self.sendprivmsg(ctx, str(result.result))
                 case _:
-                    logging.warning(f"#{ctx.channel.name} @{ctx.author.name}: {ctx.original_content} ▲ warning spotted: {result.code} {result.code.name} ▲ {one_line_exception(result.result)}")
+                    logging.error(f"#{ctx.channel.name} @{ctx.author.name}: {ctx.original_content} ▲ {result.code} {result.code.name} ▲ {one_line_exception(result.result)}")
         else:
-            logging.error(f"#{ctx.channel.name} @{ctx.author.name}: {ctx.original_content} ▲ error spotted: no result object ▲ {result}")
+            logging.error(f"#{ctx.channel.name} @{ctx.author.name}: {ctx.original_content} ▲ no Result object ▲ {result}")
 
     async def sendprivmsg(self, ctx: Context, message: str):
         await ctx.send(beauty(message))
