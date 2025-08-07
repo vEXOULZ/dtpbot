@@ -7,10 +7,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy import String, Column, select, func
 
+from core.nut.result import Result, ECODE
 from core.utils.ws_send import beauty
 from core.acorn.base import Acorn
 from core.nut.nut import InvokeNut, CommandNut, DEFAULT_ALIAS
-from core.nut.restrictions import restrict, PRIVILEDGE, fullname_only
+from core.nut.restrictions import restrict, PRIVILEDGE
 from core.utils.logger import get_log
 from core.database.sql import Base, create_session
 
@@ -247,11 +248,13 @@ class PyramidAcorn(Acorn):
         return roll > threshold
 
     async def facts_over_feelings(self, ctx: commands.Context, fact: str):
-        await ctx.send(beauty(f"/me ▲ FACT: {fact}"))
+        result = Result(ECODE.OK, f"/me ▲ FACT: {fact}")
+        await ctx.bot.treat_result(ctx, result)
 
     async def feelings_won_over(self, ctx: commands.Context, user: str, level: int, pyramid: str):
         logging.info(f"#{ctx.channel.name} | complete '{pyramid}' pyramid lvl {str(level)} by {user}")
-        await ctx.send(beauty(f"/me ▲ GRATS @{user}: {str(level)} high {pyramid} Clap"))
+        result = Result(ECODE.OK, f"/me ▲ GRATS @{user}: {str(level)} high {pyramid} Clap")
+        await ctx.bot.treat_result(ctx, result)
         PyramidUserData.save_win(ctx.channel.name, user, level, pyramid)
 
     @InvokeNut()
@@ -262,6 +265,8 @@ class PyramidAcorn(Acorn):
 
         if self.configs[ctx.channel.name].active:
             await self.test_pyramid(ctx)
+
+        return Result(ECODE.SILENT, None)
 
     @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
@@ -278,7 +283,7 @@ class PyramidAcorn(Acorn):
         config.profile = profile
         config.save()
         logging.info(f"#{ctx.channel.name} | pyramid destroying profile changed to '{profile}' by @{ctx.author.name}")
-        await ctx.send(beauty(f"Dooming profile changed to '{profile}'"))
+        return Result(ECODE.OK, f"Dooming profile changed to '{profile}'")
 
     @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.GOD)
@@ -295,7 +300,7 @@ class PyramidAcorn(Acorn):
         self.profiles = PyramidProfiles.get_all()
 
         logging.info(f"#{ctx.channel.name} | pyramid destroying profile '{profile}' created by @{ctx.author.name}")
-        await ctx.send(beauty(f"Pyramid dooming profile '{profile}' created"))
+        return Result(ECODE.OK, f"Pyramid dooming profile '{profile}' created")
 
     @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
@@ -308,7 +313,7 @@ class PyramidAcorn(Acorn):
         config.active = True
         config.save()
         logging.info(f"#{ctx.channel.name} | pyramid destroying enabled by @{ctx.author.name}")
-        await ctx.send(beauty(f"Pyramid watch enabled"))
+        return Result(ECODE.OK, f"Pyramid watch enabled")
 
     @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
@@ -321,14 +326,14 @@ class PyramidAcorn(Acorn):
         config.active = False
         config.save()
         logging.info(f"#{ctx.channel.name} | pyramid destroying disabled by @{ctx.author.name}")
-        await ctx.send(beauty(f"No longer watching for pyramids"))
+        return Result(ECODE.OK, f"No longer watching for pyramids")
 
     @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.GOD)
     async def refreshprofiles(self, ctx: commands.Context):
         self.profiles = PyramidProfiles.get_all()
         logging.info(f"#{ctx.channel.name} | profile values refreshed by @{ctx.author.name}")
-        await ctx.send(beauty(f"Profiles refreshed; available: {list(self.profiles.keys())}"))
+        return Result(ECODE.OK, f"Profiles refreshed; available: {list(self.profiles.keys())}")
 
     @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
@@ -341,7 +346,7 @@ class PyramidAcorn(Acorn):
         config.facts = default_facts
         config.save()
         logging.info(f"#{ctx.channel.name} | pyramid facts reset to default by @{ctx.author.name}")
-        await ctx.send(beauty(f"Pyramid facts reset to default"))
+        return Result(ECODE.OK, f"Pyramid facts reset to default")
 
     @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
@@ -354,7 +359,7 @@ class PyramidAcorn(Acorn):
         config.facts = list(config.facts) + [str(fact) for fact in args]
         config.save()
         logging.info(f"#{ctx.channel.name} | pyramid facts {str(args)} added successfully by @{ctx.author.name}")
-        await ctx.send(beauty(f"Pyramid facts added successfully"))
+        return Result(ECODE.OK, f"Pyramid facts added successfully")
 
     @CommandNut(default_aliases= DEFAULT_ALIAS.FULLNAME_ONLY)
     @restrict(PRIVILEDGE.MODERATOR)
@@ -367,6 +372,6 @@ class PyramidAcorn(Acorn):
         config.facts = []
         config.save()
         logging.info(f"#{ctx.channel.name} | pyramid facts cleared by @{ctx.author.name}")
-        await ctx.send(beauty(f"Pyramid facts list emptied"))
+        return Result(ECODE.OK, f"Pyramid facts list emptied")
 
 

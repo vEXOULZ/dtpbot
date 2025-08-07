@@ -2,6 +2,8 @@ import inspect
 from typing import TYPE_CHECKING
 
 from core.nut.nut import Nut
+from core.utils.logger import get_log
+
 
 if TYPE_CHECKING:
     from core.bot import Bot
@@ -16,9 +18,11 @@ class Acorn():
         self._name = self._name or self.__class__.__name__
 
     def load_nuts(self, bot: 'Bot') -> None:
+        logging = get_log(self.__module__)
         for _, method in inspect.getmembers(self):
             if isinstance(method, Nut):
-                method.register(self, bot)
+                details = method.register(self, bot)
+                logging.info(f"Loaded <{method.__class__.__name__}> [{method.fullname}] {details}")
 
                 self._nuts[method.fullname] = method
 

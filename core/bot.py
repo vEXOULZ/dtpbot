@@ -1,6 +1,7 @@
 import datetime as dt
 from typing import List, Tuple, Union
 import re
+from asyncio import as_completed
 
 from twitchio.ext.commands import Context
 from twitchio.message import Message
@@ -9,12 +10,15 @@ from twitchio.client import Client
 from core.acorn.base import Acorn
 from core.acorn.meta import MetaAcorn
 from core.acorn.pyramid import PyramidAcorn
+from core.acorn.twitch import TwitchAcorn
 from core.patches.http import apply_http_patch
 from core.patches.websocket import apply_websocket_patch
+from core.patches.context import new_context
 from core.database.auths import BotAuths
 from core.database.settings import Channels
 from core.utils.logger import get_log
 from core.nut.nut import Nut, CommandNut, InvokeNut
+from core.nut.result import Result, ECODE
 from core.config import ENVIRONMENT, GITHASH, GITSUMMARY , GITWHEN
 from core.utils.ws_send import beauty
 
@@ -58,9 +62,10 @@ class Bot(Client):
 
         self.add_acorn(MetaAcorn(self))
         self.add_acorn(PyramidAcorn())
+        self.add_acorn(TwitchAcorn())
 
-        alive_notif = f"I am alive! build {GITHASH} as of {GITWHEN} \"{GITSUMMARY}\""
-        await self._connection.send(f"PRIVMSG #{self.nick} :{beauty(alive_notif)}\r\n")
+        ctx = new_context(self)
+        await self.sendprivmsg(ctx, f"I am alive! build {GITHASH} as of {GITWHEN} \"{GITSUMMARY}\"")
 
     async def join_channels(self, channels: Union[List[str], Tuple[str]]):
         joined = []
@@ -112,8 +117,9 @@ class Bot(Client):
         for nut in self._invoke_nuts:
             nutting_list.append(nut.actuate(ctx))
 
-        for nut in nutting_list:
-            await nut
+        for nut in as_completed(nutting_list):
+            result = await nut
+            await self.treat_result(ctx, result)
 
     def add_acorn(self, acorn: Acorn):
         if isinstance(acorn, Acorn):
@@ -163,3 +169,17 @@ class Bot(Client):
                     continue
                 del self._command_nuts[alias]
 
+    async def treat_result(self, ctx: Context, result: Result):
+        if isinstance(result, Result):
+            match result.code:
+                case ECODE.OK:
+                    await self.sendprivmsg(ctx, result.result)
+                case ECODE.SILENT:
+                    pass
+                case _:
+                    logging.warning(f"warning spotted: {result.code} :: {result.result}")
+        else:
+            logging.error(f"error spotted: {result}")
+
+    async def sendprivmsg(self, ctx: Context, message: str):
+        await ctx.send(beauty(message))

@@ -6,12 +6,19 @@ from enum import Enum, auto
 from abc import ABC
 import datetime as dt
 
+from zoneinfo import ZoneInfo
 import aiocron
 from twitchio.ext import commands
 from twitchio.ext.commands import Context
 from twitchio.message import Message
 from twitchio.channel import Channel
 from twitchio.chatter import PartialChatter
+
+from core.patches.context import switch_channel
+from core.utils.logger import get_log
+from core.nut.result import Result, ECODE
+
+logging = get_log(__name__)
 
 if TYPE_CHECKING:
     from core.acorn.base import Acorn
@@ -27,7 +34,13 @@ class Nut(ABC):
         return self
 
     async def actuate(self, ctx: commands.Context, *args, **kwargs):
-        return await self._callback(self.acorn, ctx, *args, **kwargs)
+        try:
+            result = await self._callback(self.acorn, ctx, *args, **kwargs)
+            if isinstance(result, Result):
+                return result
+            return Result(ECODE.UNCAUGHT, ctx, result)
+        except Exception as e:
+            return Result(ECODE.UNCAUGHT, ctx, e)
 
     def initialize_function(self, fun: Callable = None, name: str = None, **kwargs):
         if not inspect.iscoroutinefunction(fun):
@@ -66,6 +79,7 @@ class InvokeNut(Nut):
     def register(self, acorn: 'Acorn', bot: 'Bot'):
         self.acorn = acorn
         bot.add_invoke_nut(self)
+        return ""
 
     def unregister(self, acorn: 'Acorn', bot: 'Bot'):
         self.acorn = acorn
@@ -120,9 +134,7 @@ class CommandNut(Nut):
     def admin_kwargs(self, ctx: commands.Context, **kwargs):
 
         if '_ch' in kwargs:
-            new_channel = copy.copy(ctx.channel)
-            new_channel._name = kwargs.pop('_ch')
-            ctx.channel = new_channel
+            ctx = switch_channel(ctx, kwargs.pop('_ch'))
 
         if '_sybau' in kwargs:
             sybau = kwargs.pop('_sybau')
@@ -177,6 +189,7 @@ class CommandNut(Nut):
                 case DEFAULT_ALIAS.NAME_ONLY:
                     self._aliases = [self.name]
         bot.add_command_nut(self, self._aliases)
+        return f"aliases = {str(self._aliases)}"
 
     def unregister(self, acorn: 'Acorn', bot: 'Bot'):
         self.acorn = acorn
@@ -185,10 +198,12 @@ class CommandNut(Nut):
 
 class CronNut(Nut):
 
-    _cronstring = None
+    _cronstring: str = None
+    _timezone: str = None
 
-    def __init__(self, cronstring: str, **kwargs):
+    def __init__(self, cronstring: str, timezone: str = "UTC", **kwargs):
         self._cronstring = cronstring
+        self._timezone = timezone
 
     async def actuate(self, *args, **kwargs):
         ctx = Context(
@@ -201,16 +216,20 @@ class CronNut(Nut):
                 channel = Channel(name=self.bot.nick, websocket=self.bot._connection)
             ), self.bot
         )
-        return await super().actuate(ctx, *args, **kwargs)
+        result = await super().actuate(ctx, *args, **kwargs)
+        await self.bot.treat_result(ctx, result)
+        return result
 
     def register(self, acorn: 'Acorn', bot: 'Bot'):
         self.acorn = acorn
         self.bot = bot
-        cronfun = aiocron.crontab(self._cronstring, func=self.actuate, start=False)
+        cronfun = aiocron.crontab(self._cronstring, func=self.actuate, start=False, tz=ZoneInfo(self._timezone))
         self.cronfun = cronfun
         self.cronfun.start()
+        return self.cronfun.cronsim.explain()
 
     def unregister(self, acorn: 'Acorn', bot: 'Bot'):
         self.acorn = acorn
         self.bot = bot
         self.cronfun.stop()
+        return self.cronfun.cronsim.explain()

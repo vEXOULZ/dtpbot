@@ -14,9 +14,9 @@ from core.utils.logger import get_log
 from core.utils.timeit import TimeThis
 from core.utils.units import strfdelta, strfbytes
 from core.nut.nut import CommandNut, DEFAULT_ALIAS, CronNut
-from core.nut.restrictions import cooldown, PRIVILEDGE, channel, restrict, get_priviledge, fullname_only
+from core.nut.result import ECODE, Result
+from core.nut.restrictions import cooldown, PRIVILEDGE, channel, restrict, get_priviledge
 from core.config import BOTNAME
-from twitchio import Channel
 
 if TYPE_CHECKING:
     from core.bot import Bot
@@ -65,35 +65,32 @@ class MetaAcorn(Acorn):
         mem_usage = psutil.Process(pid).memory_info().rss # bytes
         mem_usage = strfbytes(mem_usage)
 
-        await ctx.send(beauty(f'latency: {time} | uptime: {uptime} | alloc: {mem_usage}'))
+        return Result(ECODE.OK, f'latency: {time} | uptime: {uptime} | alloc: {mem_usage}')
 
     @CommandNut()
     @cooldown(10, exception = PRIVILEDGE.NOBODY)
     async def ping(self, ctx: commands.Context):
-        await self._ping(ctx)
+        return await self._ping(ctx)
 
-    @CronNut('*/5 * * * *')
+    @CronNut('*/15 * * * *')
     async def ping_cron(self, ctx: commands.Context):
-        new_channel = copy(ctx.channel)
-        new_channel._name = ctx.bot.nick
-        ctx.channel = new_channel
-        await self._ping(ctx)
+        return await self._ping(ctx)
 
     @CommandNut(default_aliases=DEFAULT_ALIAS.FULLNAME_ONLY)
     @cooldown(10, exception = PRIVILEDGE.NOBODY)
     async def fullping(self, ctx: commands.Context):
-        await self._ping(ctx)
+        return await self._ping(ctx)
         # await self._redis(ctx)
 
-    # @CommandNut
+    @CommandNut()
     @channel([BOTNAME])
     async def join(self, ctx: commands.Context, channel: str):
 
         if get_priviledge(ctx) >= PRIVILEDGE.GOD or ctx.author.name == channel.lower():
-            await ctx.send(beauty(f"joining channel #{channel.lower()}"))
             await ctx.bot.join_channels([channel.lower()])
+            return Result(ECODE.OK, f"joining channel #{channel.lower()}")
 
-    # @CommandNut
+    @CommandNut()
     @restrict(PRIVILEDGE.BROADCASTER)
     async def part(self, ctx: commands.Context, channel: str = None):
 
@@ -108,11 +105,11 @@ class MetaAcorn(Acorn):
             # TODO throw error
             return
 
-        await ctx.send(beauty(f"parting channel #{channel.lower()}"))
         await ctx.bot.part_channels([channel.lower()])
+        return Result(ECODE.OK, f"parting channel #{channel.lower()}")
 
-    # @CommandNut
+    @CommandNut()
     @restrict(PRIVILEDGE.GOD)
     async def echo(self, ctx: commands.Context):
         logging.info(f"#{ctx.channel.name} echoed @{ctx.author.name}'s '{ctx.message.content}'")
-        await ctx.send(beauty(ctx.message.content))
+        return Result(ECODE.OK, ctx.message.content)

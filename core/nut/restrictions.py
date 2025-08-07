@@ -82,7 +82,3 @@ def channel(channels: list[str]):
         return wrapper
 
     return deco
-
-def fullname_only(cnut: CommandNut):
-    cnut.__fullname_only = True
-    return cnut
