@@ -8,7 +8,6 @@ from copy import copy
 import psutil
 from twitchio.ext import commands
 
-from core.utils.ws_send import beauty
 from core.acorn.base import Acorn
 from core.utils.logger import get_log
 from core.utils.timeit import TimeThis
@@ -65,21 +64,28 @@ class MetaAcorn(Acorn):
         mem_usage = psutil.Process(pid).memory_info().rss # bytes
         mem_usage = strfbytes(mem_usage)
 
-        return Result(ECODE.OK, f'latency: {time} | uptime: {uptime} | alloc: {mem_usage}')
+        return {
+            'latency': time,
+            'uptime': uptime,
+            'alloc': mem_usage,
+        }
 
     @CommandNut()
     @cooldown(10, exception = PRIVILEDGE.NOBODY)
     async def ping(self, ctx: commands.Context):
-        return await self._ping(ctx)
+        stats = await self._ping(ctx)
+        return Result(ECODE.OK, f"latency: {stats['latency']} ▲ uptime: {stats['uptime']} ▲ alloc: {stats['alloc']}")
 
     @CronNut('*/15 * * * *')
     async def ping_cron(self, ctx: commands.Context):
-        return await self._ping(ctx)
+        stats = await self._ping(ctx)
+        return Result(ECODE.OK, f"heartbeat ❤️ latency: {stats['latency']} ▲ uptime: {stats['uptime']} ▲ alloc: {stats['alloc']}")
 
     @CommandNut(default_aliases=DEFAULT_ALIAS.FULLNAME_ONLY)
     @cooldown(10, exception = PRIVILEDGE.NOBODY)
     async def fullping(self, ctx: commands.Context):
-        return await self._ping(ctx)
+        stats = await self._ping(ctx)
+        return Result(ECODE.OK, f"latency: {stats['latency']} ▲ uptime: {stats['uptime']} ▲ alloc: {stats['alloc']}")
         # await self._redis(ctx)
 
     @CommandNut()

@@ -8,7 +8,6 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy import String, Column, select, func
 
 from core.nut.result import Result, ECODE
-from core.utils.ws_send import beauty
 from core.acorn.base import Acorn
 from core.nut.nut import InvokeNut, CommandNut, DEFAULT_ALIAS
 from core.nut.restrictions import restrict, PRIVILEDGE

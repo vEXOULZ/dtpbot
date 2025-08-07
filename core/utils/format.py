@@ -1,4 +1,5 @@
 from typing import Callable
+import traceback
 
 from core.config import ENVIRONMENT
 
@@ -15,3 +16,8 @@ def build_appender(env) -> Callable:
     return privmsg
 
 beauty: Callable = build_appender(ENVIRONMENT)
+
+def one_line_exception(e: Exception) -> str:
+    locale, reason = traceback.format_exception(e)[-2:]
+    locale = locale.split("\n")[0] # location only
+    return f"{locale.strip()} ▲ {reason.strip()}"

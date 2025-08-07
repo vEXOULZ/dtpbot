@@ -38,9 +38,9 @@ class Nut(ABC):
             result = await self._callback(self.acorn, ctx, *args, **kwargs)
             if isinstance(result, Result):
                 return result
-            return Result(ECODE.UNCAUGHT, ctx, result)
+            return Result(ECODE.UNCAUGHT, result)
         except Exception as e:
-            return Result(ECODE.UNCAUGHT, ctx, e)
+            return Result(ECODE.UNCAUGHT, e)
 
     def initialize_function(self, fun: Callable = None, name: str = None, **kwargs):
         if not inspect.iscoroutinefunction(fun):

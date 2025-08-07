@@ -1,7 +1,7 @@
 import datetime as dt
 from typing import List, Tuple, Union
-import re
 from asyncio import as_completed
+import traceback
 
 from twitchio.ext.commands import Context
 from twitchio.message import Message
@@ -17,10 +17,10 @@ from core.patches.context import new_context
 from core.database.auths import BotAuths
 from core.database.settings import Channels
 from core.utils.logger import get_log
-from core.nut.nut import Nut, CommandNut, InvokeNut
+from core.nut.nut import CommandNut, InvokeNut
 from core.nut.result import Result, ECODE
 from core.config import ENVIRONMENT, GITHASH, GITSUMMARY , GITWHEN
-from core.utils.ws_send import beauty
+from core.utils.format import beauty, one_line_exception
 
 logging = get_log(__name__)
 
@@ -93,6 +93,8 @@ class Bot(Client):
         ctx = Context(message, self)
 
         nutting_list = []
+
+        ctx.original_content = ctx.message.content
 
         if ENVIRONMENT == 'dev': # dev only
             if not ctx.message.content.startswith(self._dev_prefix) and ctx.author.name != self.nick:
@@ -177,9 +179,9 @@ class Bot(Client):
                 case ECODE.SILENT:
                     pass
                 case _:
-                    logging.warning(f"warning spotted: {result.code} :: {result.result}")
+                    logging.warning(f"#{ctx.channel.name} @{ctx.author.name}: {ctx.original_content} ▲ warning spotted: {result.code} {result.code.name} ▲ {one_line_exception(result.result)}")
         else:
-            logging.error(f"error spotted: {result}")
+            logging.error(f"#{ctx.channel.name} @{ctx.author.name}: {ctx.original_content} ▲ error spotted: no result object ▲ {result}")
 
     async def sendprivmsg(self, ctx: Context, message: str):
         await ctx.send(beauty(message))

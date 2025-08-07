@@ -1,27 +1,14 @@
-import uuid
-import asyncio
 import datetime as dt
 from typing import TYPE_CHECKING
-import os
-from copy import copy
 
-import psutil
 from twitchio.ext import commands
 from twitchio.errors import HTTPException
 
-from core.utils.ws_send import beauty
 from core.acorn.base import Acorn
 from core.utils.logger import get_log
-from core.utils.timeit import TimeThis
-from core.utils.units import strfdelta, strfbytes
-from core.nut.nut import CommandNut, DEFAULT_ALIAS, CronNut
+from core.utils.units import strfdelta
+from core.nut.nut import CommandNut
 from core.nut.result import Result, ECODE
-from core.nut.restrictions import cooldown, PRIVILEDGE, channel, restrict, get_priviledge
-from core.config import BOTNAME
-from twitchio import Channel
-
-if TYPE_CHECKING:
-    from core.bot import Bot
 
 logging = get_log(__name__)
 
