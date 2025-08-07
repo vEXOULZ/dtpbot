@@ -1,4 +1,5 @@
 import yaml
+import datetime as dt
 
 from git import Repo
 
@@ -14,5 +15,5 @@ ENVIRONMENT = yaml_data['ENVIRONMENT']
 
 GITCOMMIT = Repo('./').commit()
 GITHASH = GITCOMMIT.hexsha[:7]
-GITWHEN = GITCOMMIT.committed_datetime.strftime("%Y-%m-%d %H:%M:%S")
+GITWHEN = dt.datetime.fromtimestamp(GITCOMMIT.committed_datetime.timestamp(), tz=dt.timezone.utc).isoformat().replace("+00:00", "Z")
 GITSUMMARY = GITCOMMIT.summary
