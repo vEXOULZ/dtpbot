@@ -1,7 +1,9 @@
 from typing import TYPE_CHECKING
+from functools import wraps
 
 from twitchio.http import TwitchHTTP
 from twitchio.errors import AuthenticationError
+import aiohttp
 
 from core.database.auths import BotAuths
 from core.utils.logger import get_log
@@ -24,14 +26,6 @@ class TwitchHTTPWrapper(TwitchHTTP):
         self.auths          = auths
         self._refresh_token = auths.refresh_token # WHY: not exactly sure why I can't create a bot with a refresh token
 
-    async def validate(self, *, token: str = None) -> dict:
-        # WHY: if I can regenerate login, why not do it?
-        try:
-            data = await super().validate(token=token)
-        except AuthenticationError:
-            await self._generate_login()
-            data = await super().validate(token=self.token)
-        return data
 
     async def _generate_login(self):
         redirecter = await super()._generate_login()
@@ -42,6 +36,33 @@ class TwitchHTTPWrapper(TwitchHTTP):
         self.auths.save()
         self.client._connection._token = self.token # TODO: do this in a nicer way
         return redirecter
+
+    # WHY didnt it check for closed connections??
+    # trying to keep the same connection alive for days is wild
+    # @wraps(TwitchHTTP.request)
+    async def request(self, *args, **kwargs):
+        if not self.session or self.session.closed:
+            self.session = aiohttp.ClientSession()
+        return await super().request(*args, **kwargs)
+
+    # WHY didnt it check for closed connections??
+    # @wraps(TwitchHTTP._generate_login)
+    async def _generate_login(self, *args, **kwargs):
+        if not self.session or self.session.closed:
+            self.session = aiohttp.ClientSession()
+        return await super()._generate_login(*args, **kwargs)
+
+    # WHY didnt it check for closed connections??
+    async def validate(self, *, token: str = None) -> dict:
+        if not self.session or self.session.closed:
+            self.session = aiohttp.ClientSession()
+        try:
+            data = await super().validate(token=token)
+        except AuthenticationError:
+            # WHY: if I can regenerate login, why not do it?
+            await self._generate_login()
+            data = await super().validate(token=self.token)
+        return data
 
 def apply_http_patch(bot: 'Bot', auths: BotAuths):
     bot._http = TwitchHTTPWrapper(bot, auths = auths)
