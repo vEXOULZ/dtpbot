@@ -49,19 +49,19 @@ class TwitchHTTPWrapper(TwitchHTTP):
     # WHY didnt it check for closed connections??
     @wraps(TwitchHTTP.request)
     async def request(self, *args, **kwargs):
-        self.check_session()
+        # self.check_session()
         return await super().request(*args, **kwargs)
 
     # WHY didnt it check for closed connections??
     @wraps(TwitchHTTP._generate_login)
     async def _generate_login(self, *args, **kwargs):
-        self.check_session()
+        # self.check_session()
         return await super()._generate_login(*args, **kwargs)
 
     # WHY didnt it check for closed connections??
     @wraps(TwitchHTTP.validate)
     async def validate(self, *, token: str = None) -> dict:
-        self.check_session()
+        # self.check_session()
         try:
             data = await super().validate(token=token)
         except AuthenticationError:
