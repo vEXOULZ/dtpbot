@@ -1,6 +1,7 @@
 import datetime as dt
 from typing import List, Tuple, Union, Collection
 from asyncio import as_completed
+import traceback
 
 from twitchio.ext.commands import Context
 from twitchio.message import Message
@@ -181,7 +182,7 @@ class Bot(Client):
                     logging.warning(f"#{ctx.channel.name} @{ctx.author.name}: {ctx.original_content} ▲ {result.code} {result.code.name} ▲ {one_line_exception(result.result)}")
                     await self.sendprivmsg(ctx, str(result.result))
                 case _:
-                    logging.error(f"#{ctx.channel.name} @{ctx.author.name}: {ctx.original_content} ▲ {result.code} {result.code.name} ▲ {one_line_exception(result.result)}")
+                    logging.error(f"#{ctx.channel.name} @{ctx.author.name}: {ctx.original_content} ▲ {result.code} {result.code.name} ▲ {traceback.format_exception(result.result)}")
         else:
             logging.error(f"#{ctx.channel.name} @{ctx.author.name}: {ctx.original_content} ▲ no Result object ▲ {result}")
 
