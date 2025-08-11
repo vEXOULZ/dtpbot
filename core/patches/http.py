@@ -42,7 +42,7 @@ class TwitchHTTPWrapper(TwitchHTTP):
     # trying to keep the same connection alive for days is wild
     def check_session(self):
         if   not self.session    : logging.info("No session found: new aiotthp client session created")
-        elif self.session.closed : logging.info("Session closed: new aiotthp ClientSession created")
+        # elif self.session.closed : logging.info("Session closed: new aiotthp ClientSession created")
         else                     : return
         self.session = aiohttp.ClientSession()
 
